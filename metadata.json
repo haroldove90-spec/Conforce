@@ -1,0 +1,6 @@
+{
+  "name": "ConForce",
+  "description": "Marketplace global ConForce para todo tipo de negocios, tiendas y servicios con geolocalización, pedidos en tiempo real y gestión corporativa.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

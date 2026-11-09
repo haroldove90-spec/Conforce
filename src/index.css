@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-red: #D4021D;
+    --brand-red-dark: #b50218;
+    --brand-red-light: #fef2f2;
+    --brand-black: #000000;
+  }
+
+  * {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    max-width: 100vw;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: #ffffff;
+    color: #0f172a;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    max-width: 100vw;
+    width: 100%;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+}
+
+/* Custom smooth scroll and scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.bg-conforce-red {
+  background-color: #D4021D;
+}
+.hover\:bg-conforce-red-dark:hover {
+  background-color: #b50218;
+}
+.text-conforce-red {
+  color: #D4021D;
+}
+.border-conforce-red {
+  border-color: #D4021D;
+}
+.bg-conforce-light {
+  background-color: #fef2f2;
+}
+
+
