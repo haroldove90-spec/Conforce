@@ -1,6 +1,5 @@
 // server.ts
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import path from "path";
 import fs from "fs";
@@ -242,8 +241,10 @@ app.post("/api/gemini/assistant", handleGeminiAssistant);
 async function startServer() {
   const distPath = path.resolve(process.cwd(), "dist");
   const hasDist = fs.existsSync(path.resolve(distPath, "index.html"));
-  const isProd = process.env.NODE_ENV === "production" || hasDist && process.env.NODE_ENV !== "development";
-  if (!isProd) {
+  const hasRootIndex = fs.existsSync(path.resolve(process.cwd(), "index.html"));
+  const isProd = process.env.NODE_ENV === "production" || hasDist || process.env.VERCEL === "1";
+  if (!isProd && !hasDist) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -254,13 +255,16 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(distPath));
+    const staticDir = hasDist ? distPath : process.cwd();
+    app.use(express.static(staticDir));
     app.get("*", (req, res) => {
-      res.sendFile(path.resolve(distPath, "index.html"));
+      const targetIndex = hasDist ? path.resolve(distPath, "index.html") : path.resolve(process.cwd(), "index.html");
+      res.sendFile(targetIndex);
     });
   }
-  app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`ConForce Full-Stack Server running at http://0.0.0.0:${PORT}`);
+  const portToListen = !isNaN(Number(PORT)) ? Number(PORT) : PORT;
+  app.listen(portToListen, () => {
+    console.log(`ConForce Server running on ${PORT}`);
   });
 }
 startServer();
