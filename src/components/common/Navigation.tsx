@@ -24,7 +24,8 @@ import {
   MessageCircle,
   KeyRound,
   Check,
-  X
+  X,
+  Bike
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -43,6 +44,8 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
     setActiveSellerTab,
     activeAdminTab,
     setActiveAdminTab,
+    activeDriverTab,
+    setActiveDriverTab,
     cartTotalCount,
     orders,
     currentSellerBusiness,
@@ -91,6 +94,13 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
           { id: 'map', label: 'Mapa & Navegación', icon: <Layers className="w-4 h-4" /> },
           { id: 'finances', label: 'Finanzas & Comisiones', icon: <DollarSign className="w-4 h-4" /> }
         ];
+      case 'driver':
+        return [
+          { id: 'deliveries', label: 'Despachos en Vivo', icon: <Bike className="w-4 h-4 text-emerald-400" /> },
+          { id: 'history', label: 'Historial de Carreras', icon: <Clock className="w-4 h-4" /> },
+          { id: 'wallet', label: 'Billetera Pago Móvil', icon: <DollarSign className="w-4 h-4 text-emerald-400" /> },
+          { id: 'profile', label: 'Mi Moto y Licencia', icon: <User className="w-4 h-4" /> }
+        ];
       default:
         return [
           { id: 'explore', label: 'Vitrina de Tiendas', icon: <Compass className="w-4 h-4" /> },
@@ -120,6 +130,13 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
           { id: 'finances', label: 'Finanzas', icon: <DollarSign className="w-5 h-5 text-white" /> },
           { id: 'roles_modal', label: 'Roles', icon: <Sparkles className="w-5 h-5 text-white" /> }
         ];
+      case 'driver':
+        return [
+          { id: 'deliveries', label: 'Despachos', icon: <Bike className="w-5 h-5 text-emerald-400" /> },
+          { id: 'wallet', label: 'Billetera', icon: <DollarSign className="w-5 h-5 text-white" /> },
+          { id: 'profile', label: 'Mi Moto', icon: <User className="w-5 h-5 text-white" /> },
+          { id: 'roles_modal', label: 'Roles', icon: <Sparkles className="w-5 h-5 text-white" /> }
+        ];
       default:
         return [
           { id: 'explore', label: 'Inicio', icon: <Compass className="w-5 h-5 text-white" /> },
@@ -136,7 +153,9 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
       ? activeClientTab
       : currentRole === 'seller'
       ? activeSellerTab
-      : activeAdminTab;
+      : currentRole === 'admin'
+      ? activeAdminTab
+      : activeDriverTab;
 
   const handleTabClick = (tabId: string) => {
     if (tabId === 'roles_modal' || tabId === 'roles_hub') {
@@ -153,6 +172,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
     if (currentRole === 'client') setActiveClientTab(tabId);
     if (currentRole === 'seller') setActiveSellerTab(tabId);
     if (currentRole === 'admin') setActiveAdminTab(tabId);
+    if (currentRole === 'driver') setActiveDriverTab(tabId);
     setIsMobileMenuOpen(false);
   };
 

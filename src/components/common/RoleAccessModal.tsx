@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Role } from '../../types';
-import { ShoppingBag, Store, ShieldCheck, X, Lock, Check, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Store, ShieldCheck, X, Lock, Check, AlertCircle, Bike } from 'lucide-react';
 
 interface RoleAccessModalProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
     setIsCorporateAuthModalOpen,
     setIsClientAuthModalOpen,
     openBusinessRegistration,
+    openDriverRegistration,
     logout
   } = useApp();
 
@@ -37,6 +38,13 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
       icon: <Store className="w-6 h-6 text-zinc-200" />,
       logo: '🏪',
       desc: 'Gestionar pedidos de la tienda, catálogo y horarios'
+    },
+    {
+      id: 'driver',
+      name: 'Mensajero en Moto',
+      icon: <Bike className="w-6 h-6 text-emerald-400" />,
+      logo: '🛵',
+      desc: 'Despacho de pedidos, navegación GPS y cobro por Pago Móvil'
     },
     {
       id: 'admin',
@@ -66,6 +74,7 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
   const isAdmin = currentUser?.role === 'admin';
   const isSeller = currentUser?.role === 'seller';
   const isClient = currentUser?.role === 'client';
+  const isDriver = currentUser?.role === 'driver';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -106,6 +115,11 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
                 <Lock className="w-3 h-3" /> Restringido a Negocio
               </span>
             )}
+            {isDriver && (
+              <span className="px-2.5 py-1 rounded-full bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold text-[10px] flex items-center gap-1">
+                <Bike className="w-3 h-3" /> Mensajero Motorizado
+              </span>
+            )}
             {isClient && (
               <span className="px-2.5 py-1 rounded-full bg-blue-950 border border-blue-700 text-blue-300 font-bold text-[10px] flex items-center gap-1">
                 <Lock className="w-3 h-3" /> Restringido a Cliente
@@ -134,7 +148,8 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
               isAdmin ||
               (isSeller && item.id === 'seller') ||
               (isClient && item.id === 'client') ||
-              (!currentUser && item.id === 'client');
+              (isDriver && item.id === 'driver') ||
+              (!currentUser && (item.id === 'client' || item.id === 'driver'));
 
             return (
               <button
@@ -187,15 +202,27 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
 
         {/* Footnote */}
         <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
-          <button
-            onClick={() => {
-              onClose();
-              openBusinessRegistration(currentUser?.role === 'client');
-            }}
-            className="text-amber-400 hover:text-amber-300 font-bold transition-colors cursor-pointer"
-          >
-            + Registrar Nuevo Negocio
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                onClose();
+                openBusinessRegistration(currentUser?.role === 'client');
+              }}
+              className="text-amber-400 hover:text-amber-300 font-bold transition-colors cursor-pointer"
+            >
+              + Registrar Negocio
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                openDriverRegistration();
+              }}
+              className="text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <Bike className="w-3.5 h-3.5" />
+              <span>+ Registro Mensajero Moto</span>
+            </button>
+          </div>
           <div className="flex items-center gap-3">
             {currentUser && (
               <button

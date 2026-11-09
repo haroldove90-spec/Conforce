@@ -72,6 +72,140 @@ CREATE INDEX IF NOT EXISTS idx_businesses_is_sponsor ON public.businesses(is_spo
 CREATE INDEX IF NOT EXISTS idx_businesses_owner_username ON public.businesses(owner_username);
 `;
 
+export const SUPABASE_DRIVERS_SQL = `-- ==============================================================================
+-- 🛵 SCRIPT PARA HABILITAR MENSAJEROS EN MOTO (DRIVERS) EN SUPABASE
+-- Copia y corre esto en: https://supabase.com/dashboard/project/cjoszqkgqtgfvzqxcsvi/sql/new
+-- ==============================================================================
+
+-- 1. Actualizar restricción de roles en users para admitir 'driver'
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE public.users ADD CONSTRAINT users_role_check CHECK (role IN ('client', 'seller', 'admin', 'driver'));
+
+-- 2. Crear tabla de mensajeros en moto
+CREATE TABLE IF NOT EXISTS public.drivers (
+    id TEXT PRIMARY KEY DEFAULT ('drv_' || substring(gen_random_uuid()::TEXT from 1 for 8)),
+    user_id TEXT,
+    full_name TEXT NOT NULL,
+    username TEXT NOT NULL,
+    email TEXT,
+    phone TEXT NOT NULL,
+    ci_dni TEXT NOT NULL,
+    motorcycle_brand_model TEXT NOT NULL,
+    plate_number TEXT NOT NULL,
+    driver_license TEXT,
+    status TEXT NOT NULL DEFAULT 'pending_approval',
+    is_available BOOLEAN NOT NULL DEFAULT false,
+    current_coords JSONB,
+    rating NUMERIC(3,1) NOT NULL DEFAULT 5.0,
+    total_deliveries INTEGER NOT NULL DEFAULT 0,
+    earnings_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+    bank_name TEXT DEFAULT 'Banesco (0134)',
+    bank_phone TEXT,
+    bank_id_number TEXT,
+    city TEXT DEFAULT 'Caracas',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Columnas aseguradas
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS ci_dni TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS motorcycle_brand_model TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS plate_number TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS driver_license TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending_approval';
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS is_available BOOLEAN DEFAULT false;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS current_coords JSONB;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS rating NUMERIC(3,1) DEFAULT 5.0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS total_deliveries INTEGER DEFAULT 0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS earnings_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT 'Banesco (0134)';
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_phone TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_id_number TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Caracas';
+
+CREATE INDEX IF NOT EXISTS idx_drivers_username ON public.drivers(username);
+CREATE INDEX IF NOT EXISTS idx_drivers_phone ON public.drivers(phone);
+CREATE INDEX IF NOT EXISTS idx_drivers_plate ON public.drivers(plate_number);
+CREATE INDEX IF NOT EXISTS idx_drivers_status ON public.drivers(status);
+
+-- 3. Columnas en órdenes para asignación y rastreo de motorizados
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_id TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_name TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_phone TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_vehicle TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_step TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_assigned_at TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_delivered_at TIMESTAMPTZ;
+
+-- 4. RLS para drivers
+ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+    DROP POLICY IF EXISTS "Permitir lectura y gestion de motorizados" ON public.drivers;
+    CREATE POLICY "Permitir lectura y gestion de motorizados" ON public.drivers FOR ALL USING (true) WITH CHECK (true);
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
+-- 5. Publicación en Realtime
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.drivers;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
+-- 6. Motorizados de prueba
+INSERT INTO public.users (id, username, name, email, password, password_hash, role, phone, address, status, department)
+VALUES
+(
+    'usr-driver-1', 'carlos_moto', 'Carlos Mendoza (Motorizado)', 'carlos.moto@conforce.com',
+    'Chevropar#1970', 'Chevropar#1970', 'driver', '+58 412 9988776', 'Caracas Centro, Municipio Libertador', 'active', 'Logística & Despacho en Moto'
+),
+(
+    'usr-driver-2', 'jose_moto', 'José Gregorio Rivas', 'jose.moto@conforce.com',
+    'Chevropar#1970', 'Chevropar#1970', 'driver', '+58 414 5544332', 'Chacao, Caracas', 'active', 'Logística & Despacho en Moto'
+)
+ON CONFLICT (username) DO UPDATE 
+SET password = EXCLUDED.password,
+    password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    name = EXCLUDED.name,
+    status = 'active';
+
+INSERT INTO public.drivers (
+    id, user_id, full_name, username, email, phone, ci_dni,
+    motorcycle_brand_model, plate_number, driver_license,
+    status, is_available, rating, total_deliveries, earnings_balance,
+    bank_name, bank_phone, bank_id_number, city
+)
+VALUES
+(
+    'drv-1', 'usr-driver-1', 'Carlos Mendoza', 'carlos_moto', 'carlos.moto@conforce.com',
+    '+58 412 9988776', 'V-24.891.302', 'Bera SBR 150 (Azul)', 'AA1B22', 'LIC-24891302',
+    'active', true, 4.9, 128, 1420.00,
+    'Banesco (0134)', '+58 412 9988776', 'V-24891302', 'Caracas'
+),
+(
+    'drv-2', 'usr-driver-2', 'José Gregorio Rivas', 'jose_moto', 'jose.moto@conforce.com',
+    '+58 414 5544332', 'V-22.104.991', 'Empire Keeway Horse 150 (Rojo)', 'AC9X10', 'LIC-22104991',
+    'active', true, 4.8, 94, 980.00,
+    'Banco de Venezuela (0102)', '+58 414 5544332', 'V-22104991', 'Caracas - Chacao'
+)
+ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    phone = EXCLUDED.phone,
+    motorcycle_brand_model = EXCLUDED.motorcycle_brand_model,
+    plate_number = EXCLUDED.plate_number,
+    status = EXCLUDED.status,
+    is_available = EXCLUDED.is_available;
+`;
+
 export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
 -- CON FORCE MARKETPLACE - ESQUEMA COMPLETO Y DATOS INICIALES PARA SUPABASE
 -- Proyecto: marketplace@force-express.com's Project

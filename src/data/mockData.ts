@@ -8,6 +8,7 @@ import {
   UserAccount,
   ClientProfile,
   EmployeeProfile,
+  DriverProfile,
   BoostPlan,
   FailedSearchRecord
 } from '../types';
@@ -147,6 +148,104 @@ export const INITIAL_USERS: UserAccount[] = [
     address: 'Av. Coyoacán 810, Col. Del Valle, CDMX',
     createdAt: '2026-06-08',
     lastLogin: '2026-08-30 11:05'
+  },
+  {
+    id: 'usr-driver-1',
+    name: 'Carlos Mendoza (Motorizado)',
+    username: 'carlos_moto',
+    email: 'carlos.moto@conforce.com',
+    password: 'Chevropar#1970',
+    role: 'driver',
+    status: 'active',
+    phone: '+58 412 9988776',
+    address: 'Caracas Centro, Municipio Libertador',
+    createdAt: '2026-07-01',
+    lastLogin: '2026-09-08 10:15'
+  },
+  {
+    id: 'usr-driver-2',
+    name: 'José Gregorio Rivas',
+    username: 'jose_moto',
+    email: 'jose.moto@conforce.com',
+    password: 'Chevropar#1970',
+    role: 'driver',
+    status: 'active',
+    phone: '+58 414 5544332',
+    address: 'Chacao, Caracas',
+    createdAt: '2026-08-10',
+    lastLogin: '2026-09-08 11:30'
+  }
+];
+
+export const INITIAL_DRIVERS: DriverProfile[] = [
+  {
+    id: 'drv-1',
+    userId: 'usr-driver-1',
+    fullName: 'Carlos Mendoza',
+    username: 'carlos_moto',
+    email: 'carlos.moto@conforce.com',
+    phone: '+58 412 9988776',
+    ciDni: 'V-24.891.302',
+    motorcycleBrandModel: 'Bera SBR 150 (Azul)',
+    plateNumber: 'AA1B22',
+    driverLicense: 'LIC-24891302',
+    status: 'active',
+    isAvailable: true,
+    currentCoords: { lat: 10.4850, lng: -66.9020 },
+    rating: 4.9,
+    totalDeliveries: 128,
+    earningsBalance: 1420.00,
+    bankName: 'Banesco (0134)',
+    bankPhone: '+58 412 9988776',
+    bankIdNumber: 'V-24891302',
+    city: 'Caracas',
+    createdAt: '2026-07-01'
+  },
+  {
+    id: 'drv-2',
+    userId: 'usr-driver-2',
+    fullName: 'José Gregorio Rivas',
+    username: 'jose_moto',
+    email: 'jose.moto@conforce.com',
+    phone: '+58 414 5544332',
+    ciDni: 'V-22.104.991',
+    motorcycleBrandModel: 'Empire Keeway Horse 150 (Rojo)',
+    plateNumber: 'AC9X10',
+    driverLicense: 'LIC-22104991',
+    status: 'active',
+    isAvailable: true,
+    currentCoords: { lat: 10.4910, lng: -66.8620 },
+    rating: 4.8,
+    totalDeliveries: 94,
+    earningsBalance: 980.00,
+    bankName: 'Banco de Venezuela (0102)',
+    bankPhone: '+58 414 5544332',
+    bankIdNumber: 'V-22104991',
+    city: 'Caracas - Chacao',
+    createdAt: '2026-08-10'
+  },
+  {
+    id: 'drv-3',
+    userId: 'usr-driver-3',
+    fullName: 'Alejandro Morales',
+    username: 'alejandro_repartidor',
+    email: 'alejandro.moto@gmail.com',
+    phone: '+58 424 7711223',
+    ciDni: 'V-26.440.119',
+    motorcycleBrandModel: 'Suzuki GN 125 (Negra)',
+    plateNumber: 'AB8K44',
+    driverLicense: 'LIC-26440119',
+    status: 'pending_approval',
+    isAvailable: false,
+    currentCoords: { lat: 10.4780, lng: -66.8950 },
+    rating: 5.0,
+    totalDeliveries: 0,
+    earningsBalance: 0,
+    bankName: 'Bancamiga (0172)',
+    bankPhone: '+58 424 7711223',
+    bankIdNumber: 'V-26440119',
+    city: 'Caracas - La Candelaria',
+    createdAt: '2026-11-05'
   }
 ];
 

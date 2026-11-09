@@ -9,7 +9,8 @@ import {
   OrderStatus,
   UserAccount,
   ClientProfile,
-  Role
+  Role,
+  DriverProfile
 } from '../types';
 
 // Supabase Configuration from User Credentials
@@ -176,9 +177,13 @@ export function mapOrderFromDB(row: any): Order {
     paymentMethod: row.payment_method,
     paymentReference: row.payment_reference || undefined,
     paymentProofUrl: row.payment_proof_url || undefined,
+    driverId: row.driver_id || undefined,
     driverName: row.driver_name || undefined,
     driverPhone: row.driver_phone || undefined,
     driverVehicle: row.driver_vehicle || undefined,
+    driverStep: row.driver_step || undefined,
+    driverAssignedAt: row.driver_assigned_at || undefined,
+    driverDeliveredAt: row.driver_delivered_at || undefined,
     cancellationReason: row.cancellation_reason || undefined,
     review: row.review ? (typeof row.review === 'string' ? JSON.parse(row.review) : row.review) : undefined,
     orderChannel: row.order_channel || 'app',
@@ -208,9 +213,13 @@ export function mapOrderToDB(order: Order): any {
     payment_method: order.paymentMethod,
     payment_reference: order.paymentReference || null,
     payment_proof_url: order.paymentProofUrl || null,
+    driver_id: order.driverId || null,
     driver_name: order.driverName || null,
     driver_phone: order.driverPhone || null,
     driver_vehicle: order.driverVehicle || null,
+    driver_step: order.driverStep || null,
+    driver_assigned_at: order.driverAssignedAt || null,
+    driver_delivered_at: order.driverDeliveredAt || null,
     cancellation_reason: order.cancellationReason || null,
     review: order.review ? order.review : null,
     order_channel: order.orderChannel || 'app',
@@ -1034,6 +1043,96 @@ export async function clearAllSampleDataFromSupabase(): Promise<{ success: boole
     };
   }
 }
+
+// ==========================================
+// DRIVERS (MOTORIZADOS / MENSAJEROS)
+// ==========================================
+
+export function mapDriverFromDB(row: any): DriverProfile {
+  return {
+    id: row.id,
+    userId: row.user_id || `usr-driver-${row.id}`,
+    fullName: row.full_name || row.name || 'Mensajero ConForce',
+    username: row.username || 'motorizado',
+    email: row.email || '',
+    phone: row.phone || '',
+    ciDni: row.ci_dni || '',
+    motorcycleBrandModel: row.motorcycle_brand_model || 'Moto Express',
+    plateNumber: row.plate_number || 'S/P',
+    driverLicense: row.driver_license || undefined,
+    status: (row.status as any) || 'active',
+    isAvailable: Boolean(row.is_available ?? true),
+    currentCoords: row.current_coords || undefined,
+    rating: Number(row.rating ?? 5.0),
+    totalDeliveries: Number(row.total_deliveries ?? 0),
+    earningsBalance: Number(row.earnings_balance ?? 0),
+    bankName: row.bank_name || undefined,
+    bankPhone: row.bank_phone || undefined,
+    bankIdNumber: row.bank_id_number || undefined,
+    city: row.city || 'Caracas',
+    createdAt: row.created_at || new Date().toISOString()
+  };
+}
+
+export function mapDriverToDB(driver: DriverProfile): any {
+  return {
+    id: driver.id,
+    user_id: driver.userId,
+    full_name: driver.fullName,
+    username: driver.username,
+    email: driver.email,
+    phone: driver.phone,
+    ci_dni: driver.ciDni,
+    motorcycle_brand_model: driver.motorcycleBrandModel,
+    plate_number: driver.plateNumber,
+    driver_license: driver.driverLicense || null,
+    status: driver.status,
+    is_available: driver.isAvailable,
+    current_coords: driver.currentCoords || null,
+    rating: driver.rating,
+    total_deliveries: driver.totalDeliveries,
+    earnings_balance: driver.earningsBalance,
+    bank_name: driver.bankName || null,
+    bank_phone: driver.bankPhone || null,
+    bank_id_number: driver.bankIdNumber || null,
+    city: driver.city || 'Caracas',
+    created_at: driver.createdAt
+  };
+}
+
+export async function fetchDriversFromSupabase(): Promise<DriverProfile[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('drivers')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      // Table might not exist yet before SQL migration runs
+      return null;
+    }
+    return (data || []).map(mapDriverFromDB);
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function upsertDriverInSupabase(driver: DriverProfile): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('drivers')
+      .upsert(mapDriverToDB(driver), { onConflict: 'id' });
+    if (error) {
+      console.warn('Supabase upsertDriver error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase upsertDriver exception:', err);
+    return false;
+  }
+}
+
 
 
 

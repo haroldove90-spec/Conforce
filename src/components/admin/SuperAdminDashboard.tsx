@@ -41,7 +41,8 @@ import {
   Radar,
   AlertTriangle,
   RotateCcw,
-  LogOut
+  LogOut,
+  Bike
 } from 'lucide-react';
 import { SupabaseAdminView } from './SupabaseAdminView';
 import { AdminUsersView } from './AdminUsersView';
@@ -49,6 +50,7 @@ import { AdminClientsView } from './AdminClientsView';
 import { AdminEmployeesView } from './AdminEmployeesView';
 import { PdfFeatureView } from './PdfFeatureView';
 import { DemandRadarView } from './DemandRadarView';
+import { AdminDriversView } from './AdminDriversView';
 
 export const SuperAdminDashboard: React.FC = () => {
   const {
@@ -67,6 +69,7 @@ export const SuperAdminDashboard: React.FC = () => {
     users,
     clients,
     employees,
+    drivers,
     failedSearches,
     serviceFeeRate,
     clearAllSampleData,
@@ -448,6 +451,7 @@ export const SuperAdminDashboard: React.FC = () => {
           { id: 'pdf', label: 'Ficha PDF Roles', icon: <FileText className="w-4 h-4 text-[#D4021D]" /> },
           { id: 'users', label: `Usuarios & Roles (${users.length})`, icon: <ShieldCheck className="w-4 h-4 text-[#D4021D]" /> },
           { id: 'clients', label: `Clientes (${clients.length})`, icon: <Users className="w-4 h-4" /> },
+          { id: 'drivers', label: `Mensajeros Moto (${drivers.length})`, icon: <Bike className="w-4 h-4 text-emerald-500" /> },
           { id: 'employees', label: `Colaboradores (${employees.length})`, icon: <Briefcase className="w-4 h-4" /> },
           { id: 'sellers', label: `Gestión de Negocios (${businesses.length})`, icon: <Store className="w-4 h-4" /> },
           { id: 'whatsapp', label: 'WhatsApp & Bot IA', icon: <MessageSquare className="w-4 h-4" /> },
@@ -596,6 +600,9 @@ export const SuperAdminDashboard: React.FC = () => {
 
       {/* PLANTILLA DE COLABORADORES */}
       {activeAdminTab === 'employees' && <AdminEmployeesView />}
+
+      {/* MENSAJEROS Y MOTORIZADOS */}
+      {activeAdminTab === 'drivers' && <AdminDriversView />}
 
       {/* 2. GESTIÓN DE NEGOCIOS (SELLERS) */}
       {activeAdminTab === 'sellers' && (

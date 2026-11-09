@@ -48,6 +48,7 @@ export const SellerDashboard: React.FC = () => {
     deleteProduct,
     toggleOfferOfTheDay,
     orders,
+    drivers,
     updateOrderStatus,
     assignOrderDriver,
     cancelOrderWithReason,
@@ -1034,6 +1035,42 @@ export const SellerDashboard: React.FC = () => {
             </div>
 
             <div className="space-y-3 text-xs">
+              {/* Quick Select from Registered Drivers */}
+              {drivers && drivers.filter(d => d.status === 'active').length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase flex items-center justify-between">
+                    <span>Mensajeros Aliados en Moto Disponibles</span>
+                    <span className="text-emerald-600 font-semibold">1-Clic para asignar</span>
+                  </label>
+                  <div className="flex gap-2 mt-1.5 overflow-x-auto pb-1">
+                    {drivers.filter(d => d.status === 'active').map((drv) => (
+                      <button
+                        key={drv.id}
+                        type="button"
+                        onClick={() => {
+                          setDriverName(drv.fullName);
+                          setDriverPhone(drv.phone);
+                          setDriverVehicle(`${drv.motorcycleBrandModel} - Placa ${drv.plateNumber}`);
+                        }}
+                        className={`p-2 rounded-xl border text-left shrink-0 transition-all cursor-pointer ${
+                          driverName === drv.fullName
+                            ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500'
+                            : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Bike className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="font-bold text-slate-900 text-xs">{drv.fullName}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[140px]">
+                          {drv.motorcycleBrandModel}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-[10px] font-bold text-slate-600 uppercase">Nombre del Repartidor</label>
                 <input

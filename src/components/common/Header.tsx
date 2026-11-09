@@ -12,7 +12,8 @@ import {
   LogIn,
   LogOut,
   Home,
-  Menu
+  Menu,
+  Bike
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -52,6 +53,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
           name: 'Negocio',
           icon: <Store className="w-3.5 h-3.5 text-zinc-300" />,
           color: 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:bg-zinc-800'
+        };
+      case 'driver':
+        return {
+          name: 'Mensajero Moto',
+          icon: <Bike className="w-3.5 h-3.5 text-emerald-400" />,
+          color: 'bg-emerald-950/50 border-emerald-700/60 text-emerald-200 hover:bg-emerald-900/60'
         };
       default:
         return {

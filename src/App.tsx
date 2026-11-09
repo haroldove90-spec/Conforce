@@ -18,10 +18,12 @@ import { MyOrdersView } from './components/client/MyOrdersView';
 import { MyAccountView } from './components/client/MyAccountView';
 import { SellerDashboard } from './components/seller/SellerDashboard';
 import { SuperAdminDashboard } from './components/admin/SuperAdminDashboard';
+import { DriverDashboard } from './components/driver/DriverDashboard';
 import { ClientAuthModal } from './components/common/ClientAuthModal';
 import { CorporateAuthModal } from './components/common/CorporateAuthModal';
 import { UserProfileModal } from './components/common/UserProfileModal';
 import { RegisterBusinessModal } from './components/common/RegisterBusinessModal';
+import { RegisterDriverModal } from './components/common/RegisterDriverModal';
 import { CorporatePortalHome } from './components/corporate/CorporatePortalHome';
 import { Business } from './types';
 
@@ -120,6 +122,13 @@ const PulsoAppContent: React.FC = () => {
               <SuperAdminDashboard />
             </ErrorBoundary>
           )}
+
+          {/* MOTORCYCLE COURIER / DRIVER ROLE VIEWS */}
+          {currentRole === 'driver' && (
+            <ErrorBoundary fallbackTitle="Panel de Mensajería en Moto">
+              <DriverDashboard />
+            </ErrorBoundary>
+          )}
         </main>
       </div>
 
@@ -137,11 +146,12 @@ const PulsoAppContent: React.FC = () => {
         onClose={() => setIsRoleModalOpen(false)}
       />
 
-      {/* Role-based Auth Modals & Business Registration Modal */}
+      {/* Role-based Auth Modals & Registration Modals */}
       <ClientAuthModal />
       <CorporateAuthModal />
       <UserProfileModal />
       <RegisterBusinessModal />
+      <RegisterDriverModal />
 
       {/* Business Catalog / Detail Modal */}
       {selectedBusinessForDetail && (

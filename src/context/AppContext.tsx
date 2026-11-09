@@ -15,7 +15,10 @@ import {
   ClientProfile,
   EmployeeProfile,
   FailedSearchRecord,
-  BoostPlan
+  BoostPlan,
+  DriverProfile,
+  DriverStatus,
+  DriverStep
 } from '../types';
 import {
   INITIAL_BUSINESSES,
@@ -28,7 +31,8 @@ import {
   INITIAL_EMPLOYEES,
   INITIAL_CLIENTS,
   INITIAL_FAILED_SEARCHES,
-  DATA_VERSION
+  DATA_VERSION,
+  INITIAL_DRIVERS
 } from '../data/mockData';
 import {
   fetchBusinessesFromSupabase,
@@ -55,7 +59,9 @@ import {
   insertClientInSupabase,
   insertBusinessInSupabase,
   clearAllSampleDataFromSupabase,
-  SUPABASE_URL
+  SUPABASE_URL,
+  fetchDriversFromSupabase,
+  upsertDriverInSupabase
 } from '../services/supabaseClient';
 
 interface AppContextType {
@@ -257,6 +263,34 @@ interface AppContextType {
   updateEmployee: (id: string, updates: Partial<EmployeeProfile>) => void;
   toggleSuspendEmployee: (id: string) => void;
   deleteEmployee: (id: string) => void;
+
+  // Motorizados / Mensajeros en Moto (Driver Role)
+  activeDriverTab: string;
+  setActiveDriverTab: (tab: string) => void;
+  drivers: DriverProfile[];
+  currentDriverProfile: DriverProfile | undefined;
+  isRegisterDriverModalOpen: boolean;
+  setIsRegisterDriverModalOpen: (open: boolean) => void;
+  openDriverRegistration: () => void;
+  registerDriver: (data: {
+    fullName: string;
+    username: string;
+    email: string;
+    password?: string;
+    phone: string;
+    ciDni: string;
+    motorcycleBrandModel: string;
+    plateNumber: string;
+    driverLicense?: string;
+    bankName?: string;
+    bankPhone?: string;
+    bankIdNumber?: string;
+    city?: string;
+  }) => Promise<{ success: boolean; message: string; driver?: DriverProfile }>;
+  updateDriverStatus: (driverId: string, status: DriverStatus) => void;
+  toggleDriverAvailability: (driverId?: string) => void;
+  acceptOrderAsDriver: (orderId: string, driverId?: string) => void;
+  advanceDriverDeliveryStep: (orderId: string, step: DriverStep) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -277,6 +311,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (search.includes('role=seller') || search.includes('view=seller') || path.includes('/seller') || hash.includes('seller')) {
         return 'seller';
       }
+      if (search.includes('role=driver') || search.includes('view=driver') || path.includes('/driver') || hash.includes('driver')) {
+        return 'driver';
+      }
     }
     const savedUser = localStorage.getItem('mk_current_user');
     if (savedUser) {
@@ -286,7 +323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (e) {}
     }
     const savedRole = localStorage.getItem('mk_current_role') as Role;
-    if (savedRole === 'admin' || savedRole === 'seller' || savedRole === 'client') {
+    if (savedRole === 'admin' || savedRole === 'seller' || savedRole === 'client' || savedRole === 'driver') {
       return savedRole;
     }
     return 'client';
@@ -294,6 +331,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeClientTab, setActiveClientTab] = useState<string>('explore');
   const [activeSellerTab, setActiveSellerTab] = useState<string>('orders');
   const [activeAdminTab, setActiveAdminTab] = useState<string>('overview');
+  const [activeDriverTab, setActiveDriverTab] = useState<string>('deliveries');
+  const [isRegisterDriverModalOpen, setIsRegisterDriverModalOpen] = useState<boolean>(false);
+
+  // Drivers State - Persistent in LocalStorage & Supabase
+  const [drivers, setDrivers] = useState<DriverProfile[]>(() => {
+    const saved = localStorage.getItem('mk_drivers');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_DRIVERS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mk_drivers', JSON.stringify(drivers));
+    } catch (e) {}
+  }, [drivers]);
 
   // Cleared Mock Data Persistent Tracking - Defaults to TRUE so system starts clean for real testing
   const [isMockDataCleared, setIsMockDataCleared] = useState<boolean>(() => {
@@ -1330,6 +1387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (targetRole === 'client') setActiveClientTab('explore');
       if (targetRole === 'seller') setActiveSellerTab('orders');
       if (targetRole === 'admin') setActiveAdminTab('overview');
+      if (targetRole === 'driver') setActiveDriverTab('deliveries');
       return { allowed: true };
     }
 
@@ -1348,6 +1406,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       loginDirectAsSeller();
       return { allowed: true };
+    }
+
+    // Direct entry to Motorizado / Driver
+    if (targetRole === 'driver') {
+      if (currentUser?.role === 'driver') {
+        setCurrentRole('driver');
+        setActiveDriverTab('deliveries');
+        return { allowed: true };
+      }
+      let target = users.find(u => u.role === 'driver' || u.username === 'carlos_moto');
+      if (!target) {
+        target = INITIAL_USERS.find(u => u.role === 'driver') || {
+          id: 'usr-driver-1',
+          name: 'Carlos Mendoza (Motorizado)',
+          username: 'carlos_moto',
+          email: 'carlos.moto@conforce.com',
+          role: 'driver',
+          status: 'active',
+          createdAt: '2026-07-01'
+        };
+        setUsers(prev => [target!, ...prev.filter(p => p.id !== target!.id)]);
+      }
+      setCurrentUser(target);
+      setCurrentRole('driver');
+      setActiveDriverTab('deliveries');
+      try {
+        localStorage.setItem('mk_current_user', JSON.stringify(target));
+        localStorage.setItem('mk_current_role', 'driver');
+      } catch (e) {}
+      return { allowed: true, message: `Sesión iniciada como Motorizado: ${target.name}` };
     }
 
     // Switching to client
@@ -2278,26 +2366,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateOrderStatusInSupabase(orderId, newStatus);
   };
 
-  const assignOrderDriver = (orderId: string, driver: { name: string; phone: string; vehicle?: string }) => {
+  const assignOrderDriver = (orderId: string, driver: { id?: string; name: string; phone: string; vehicle?: string }) => {
+    const assignedAt = new Date().toISOString();
     setOrders(prev =>
       prev.map(o =>
         o.id === orderId
           ? {
               ...o,
               status: 'on_the_way',
+              driverId: driver.id || o.driverId,
               driverName: driver.name.trim(),
               driverPhone: driver.phone.trim(),
-              driverVehicle: driver.vehicle?.trim() || 'Motocicleta'
+              driverVehicle: driver.vehicle?.trim() || 'Motocicleta',
+              driverStep: 'heading_to_store',
+              driverAssignedAt: assignedAt
             }
           : o
       )
     );
     updateOrderInSupabase(orderId, {
       status: 'on_the_way',
-      driverName: driver.name.trim(),
-      driverPhone: driver.phone.trim(),
-      driverVehicle: driver.vehicle?.trim() || 'Motocicleta'
+      driver_id: driver.id || null,
+      driver_name: driver.name.trim(),
+      driver_phone: driver.phone.trim(),
+      driver_vehicle: driver.vehicle?.trim() || 'Motocicleta',
+      driver_step: 'heading_to_store',
+      driver_assigned_at: assignedAt
+    } as any);
+  };
+
+  const acceptOrderAsDriver = (orderId: string, driverId?: string) => {
+    const drv = drivers.find(d => d.id === (driverId || currentDriverProfile?.id)) || currentDriverProfile;
+    if (!drv) return;
+    assignOrderDriver(orderId, {
+      id: drv.id,
+      name: drv.fullName,
+      phone: drv.phone,
+      vehicle: `${drv.motorcycleBrandModel} (${drv.plateNumber})`
     });
+  };
+
+  const advanceDriverDeliveryStep = (orderId: string, step: DriverStep) => {
+    setOrders(prev =>
+      prev.map(o => {
+        if (o.id === orderId) {
+          const isDelivered = step === 'delivered';
+          const nowIso = new Date().toISOString();
+          const updated: Order = {
+            ...o,
+            driverStep: step,
+            status: isDelivered ? 'delivered' : o.status,
+            driverDeliveredAt: isDelivered ? nowIso : o.driverDeliveredAt
+          };
+
+          // Reward driver if delivered
+          if (isDelivered && o.driverId) {
+            const earnedFee = Number(o.deliveryFee || 45);
+            setDrivers(dPrev =>
+              dPrev.map(d => {
+                if (d.id === o.driverId) {
+                  const updatedDrv: DriverProfile = {
+                    ...d,
+                    totalDeliveries: d.totalDeliveries + 1,
+                    earningsBalance: d.earningsBalance + earnedFee
+                  };
+                  upsertDriverInSupabase(updatedDrv);
+                  return updatedDrv;
+                }
+                return d;
+              })
+            );
+          }
+
+          updateOrderInSupabase(orderId, {
+            driver_step: step,
+            status: isDelivered ? 'delivered' : o.status,
+            driver_delivered_at: isDelivered ? nowIso : o.driverDeliveredAt
+          } as any);
+
+          return updated;
+        }
+        return o;
+      })
+    );
   };
 
   const rateOrder = (orderId: string, rating: number, comment?: string) => {
@@ -2560,6 +2711,128 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const currentSellerBusiness = businesses.find(b => b.id === selectedBusinessId) || businesses[0] || undefined;
 
+  const currentDriverProfile = React.useMemo(() => {
+    if (currentUser?.role === 'driver') {
+      const match = drivers.find(d => d.userId === currentUser.id || d.username === currentUser.username);
+      if (match) return match;
+    }
+    return drivers[0] || undefined;
+  }, [currentUser, drivers]);
+
+  const openDriverRegistration = () => {
+    setIsRegisterDriverModalOpen(true);
+  };
+
+  const registerDriver = async (data: {
+    fullName: string;
+    username: string;
+    email: string;
+    password?: string;
+    phone: string;
+    ciDni: string;
+    motorcycleBrandModel: string;
+    plateNumber: string;
+    driverLicense?: string;
+    bankName?: string;
+    bankPhone?: string;
+    bankIdNumber?: string;
+    city?: string;
+  }): Promise<{ success: boolean; message: string; driver?: DriverProfile }> => {
+    const cleanUsername = data.username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (!cleanUsername) return { success: false, message: 'El nombre de usuario no es válido.' };
+
+    const existingUser = users.find(
+      u => u.username.toLowerCase() === cleanUsername || (data.email && u.email.toLowerCase() === data.email.trim().toLowerCase())
+    );
+    if (existingUser) {
+      return { success: false, message: 'El usuario o correo electrónico ya está registrado.' };
+    }
+
+    const driverId = `drv-${Date.now()}`;
+    const userId = `usr-driver-${Date.now()}`;
+    const password = data.password?.trim() || 'Moto#2026';
+
+    const newDriver: DriverProfile = {
+      id: driverId,
+      userId,
+      fullName: data.fullName.trim(),
+      username: cleanUsername,
+      email: data.email.trim(),
+      phone: data.phone.trim(),
+      ciDni: data.ciDni.trim().toUpperCase(),
+      motorcycleBrandModel: data.motorcycleBrandModel.trim(),
+      plateNumber: data.plateNumber.trim().toUpperCase(),
+      driverLicense: data.driverLicense?.trim().toUpperCase(),
+      status: 'pending_approval',
+      isAvailable: false,
+      rating: 5.0,
+      totalDeliveries: 0,
+      earningsBalance: 0,
+      bankName: data.bankName?.trim() || 'Pago Móvil BDV / Banesco',
+      bankPhone: data.bankPhone?.trim() || data.phone.trim(),
+      bankIdNumber: data.bankIdNumber?.trim() || data.ciDni.trim(),
+      city: data.city?.trim() || 'Caracas',
+      createdAt: new Date().toISOString()
+    };
+
+    const newUser: UserAccount = {
+      id: userId,
+      name: data.fullName.trim(),
+      username: cleanUsername,
+      email: data.email.trim(),
+      password,
+      role: 'driver',
+      status: 'active',
+      phone: data.phone.trim(),
+      department: 'Logística & Despacho en Moto',
+      createdAt: new Date().toISOString()
+    };
+
+    setDrivers(prev => [newDriver, ...prev]);
+    setUsers(prev => [newUser, ...prev]);
+
+    try {
+      localStorage.setItem('mk_drivers', JSON.stringify([newDriver, ...drivers]));
+      localStorage.setItem('mk_users', JSON.stringify([newUser, ...users]));
+      await upsertDriverInSupabase(newDriver);
+      await insertUserInSupabase(newUser);
+    } catch (e) {
+      console.warn('Driver sync notice:', e);
+    }
+
+    return {
+      success: true,
+      message: '¡Registro exitoso! Tu perfil de mensajero en moto está en revisión y será activado en breve.',
+      driver: newDriver
+    };
+  };
+
+  const updateDriverStatus = (driverId: string, status: DriverStatus) => {
+    setDrivers(prev =>
+      prev.map(d => (d.id === driverId ? { ...d, status, isAvailable: status === 'active' ? d.isAvailable : false } : d))
+    );
+    const updated = drivers.find(d => d.id === driverId);
+    if (updated) {
+      upsertDriverInSupabase({ ...updated, status });
+    }
+  };
+
+  const toggleDriverAvailability = (driverId?: string) => {
+    const targetId = driverId || currentDriverProfile?.id;
+    if (!targetId) return;
+    setDrivers(prev =>
+      prev.map(d => {
+        if (d.id === targetId) {
+          const newAvail = !d.isAvailable;
+          const updated = { ...d, isAvailable: newAvail };
+          upsertDriverInSupabase(updated);
+          return updated;
+        }
+        return d;
+      })
+    );
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -2571,6 +2844,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveSellerTab,
         activeAdminTab,
         setActiveAdminTab,
+        activeDriverTab,
+        setActiveDriverTab,
+        drivers,
+        currentDriverProfile,
+        isRegisterDriverModalOpen,
+        setIsRegisterDriverModalOpen,
+        openDriverRegistration,
+        registerDriver,
+        updateDriverStatus,
+        toggleDriverAvailability,
+        acceptOrderAsDriver,
+        advanceDriverDeliveryStep,
 
         injectMockData,
         clearAllSampleData,

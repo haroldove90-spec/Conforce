@@ -1,4 +1,4 @@
-export type Role = 'client' | 'seller' | 'admin';
+export type Role = 'client' | 'seller' | 'admin' | 'driver';
 
 export type BusinessCategory =
   | 'supermercado'
@@ -101,6 +101,7 @@ export type PaymentMethod =
   | 'cash_on_delivery'
   | 'pos_terminal';
 export type OrderChannel = 'app' | 'whatsapp';
+export type DriverStep = 'assigned' | 'heading_to_store' | 'picked_up' | 'heading_to_client' | 'delivered';
 
 export interface OrderReview {
   rating: number; // 1-5
@@ -127,9 +128,13 @@ export interface Order {
   paymentMethod: PaymentMethod;
   paymentReference?: string;
   paymentProofUrl?: string;
+  driverId?: string;
   driverName?: string;
   driverPhone?: string;
   driverVehicle?: string;
+  driverStep?: DriverStep;
+  driverAssignedAt?: string;
+  driverDeliveredAt?: string;
   cancellationReason?: string;
   review?: OrderReview;
   orderChannel?: OrderChannel;
@@ -224,6 +229,32 @@ export interface EmployeeProfile {
   systemRole: Role;
   department: string;
   status: AccountStatus;
+  createdAt: string;
+}
+
+export type DriverStatus = 'pending_approval' | 'active' | 'busy' | 'suspended';
+
+export interface DriverProfile {
+  id: string;
+  userId: string;
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  ciDni: string;
+  motorcycleBrandModel: string;
+  plateNumber: string;
+  driverLicense?: string;
+  status: DriverStatus;
+  isAvailable: boolean;
+  currentCoords?: Coordinates;
+  rating: number; // 1-5
+  totalDeliveries: number;
+  earningsBalance: number; // In Bs.
+  bankName?: string;
+  bankPhone?: string;
+  bankIdNumber?: string;
+  city?: string;
   createdAt: string;
 }
 

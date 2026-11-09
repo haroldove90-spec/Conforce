@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { Role } from '../../types';
-import { ShoppingBag, Store, ShieldCheck, MapPin, Sparkles } from 'lucide-react';
+import { ShoppingBag, Store, ShieldCheck, MapPin, Sparkles, Bike } from 'lucide-react';
 
 export const RoleSwitcherHub: React.FC = () => {
   const {
@@ -10,6 +10,7 @@ export const RoleSwitcherHub: React.FC = () => {
     setActiveClientTab,
     setActiveSellerTab,
     setActiveAdminTab,
+    setActiveDriverTab,
     currentUser,
     switchRole
   } = useApp();
@@ -36,7 +37,15 @@ export const RoleSwitcherHub: React.FC = () => {
       icon: <Store className="w-8 h-8 text-slate-900" />,
       logo: '🏪',
       color: 'bg-slate-50 border-slate-200 hover:border-slate-400 text-slate-900',
-      badge: 'Farmacia / Restaurante'
+      badge: 'Comercio Aliado'
+    },
+    {
+      id: 'driver',
+      name: 'Mensajero en Moto',
+      icon: <Bike className="w-8 h-8 text-emerald-600" />,
+      logo: '🛵',
+      color: 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 text-slate-900',
+      badge: 'Despacho & Reparto'
     },
     {
       id: 'admin',
@@ -76,8 +85,8 @@ export const RoleSwitcherHub: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid: strictly 2 columns on mobile version, 3 columns on tablet/desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
+      {/* Grid: strictly 2 columns on mobile version, 4 columns on tablet/desktop */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {rolesConfig.map((item) => {
           const isSelected = currentRole === item.id;
           return (
