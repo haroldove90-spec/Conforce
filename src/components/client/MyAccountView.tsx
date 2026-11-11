@@ -19,7 +19,8 @@ import {
   KeyRound,
   Edit3,
   LogIn,
-  LogOut
+  LogOut,
+  Bike
 } from 'lucide-react';
 
 interface MyAccountViewProps {
@@ -33,8 +34,10 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
     setIsProfileModalOpen,
     setIsClientAuthModalOpen,
     openBusinessRegistration,
+    openDriverRegistration,
     setCurrentRole,
     setActiveSellerTab,
+    setActiveDriverTab,
     userLocation,
     userAddressLabel,
     detectUserLocation,
@@ -188,6 +191,55 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
               >
                 <Store className="w-4 h-4" />
                 <span>Registrar Mi Negocio Aquí</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Become a Motorized Courier / Driver Card */}
+      <div className="p-5 bg-gradient-to-r from-emerald-950 via-zinc-900 to-black text-white rounded-3xl border border-emerald-900/40 shadow-md relative overflow-hidden">
+        <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-10 pointer-events-none">
+          <Bike className="w-48 h-48 text-white" />
+        </div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600/30 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+              <Bike className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-700/50 text-[11px] font-bold text-emerald-300 uppercase tracking-wider mb-1">
+                <Sparkles className="w-3 h-3 text-emerald-400" />
+                <span>Oportunidad Laboral • Flota ConForce</span>
+              </div>
+              <h3 className="text-base font-bold text-white">
+                ¿Tienes Moto? Trabaja como Mensajero / Repartidor
+              </h3>
+              <p className="text-xs text-zinc-300 max-w-xl mt-0.5">
+                Genera ingresos diarios entregando pedidos de farmacias, comida, repuestos y comercios. Cobros rápidos garantizados vía Pago Móvil en Bolívares.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {currentUser?.role === 'driver' ? (
+              <button
+                onClick={() => {
+                  setCurrentRole('driver');
+                  setActiveDriverTab('deliveries');
+                }}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all"
+              >
+                <span>Ir a Mi Panel de Moto</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => openDriverRegistration()}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-950/50 transition-all hover:scale-[1.02] cursor-pointer"
+              >
+                <Bike className="w-4 h-4" />
+                <span>Registrarme como Mensajero</span>
               </button>
             )}
           </div>

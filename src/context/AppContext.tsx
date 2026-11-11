@@ -221,6 +221,7 @@ interface AppContextType {
   switchRole: (targetRole: Role) => { allowed: boolean; message?: string };
   loginDirectAsAdmin: (adminType?: 'harold' | 'master') => { success: boolean; message: string };
   loginDirectAsSeller: () => { success: boolean; message: string };
+  loginDirectAsDriver: () => { success: boolean; message: string };
 
   // Modals & Intent
   isClientAuthModalOpen: boolean;
@@ -846,6 +847,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedBusinessId(user.businessId);
       }
       setActiveSellerTab('orders');
+    } else if (user.role === 'driver') {
+      setCurrentRole('driver');
+      setActiveDriverTab('deliveries');
     }
 
     setIsCorporateAuthModalOpen(false);
@@ -1376,6 +1380,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.setItem('mk_current_user', JSON.stringify(target));
       localStorage.setItem('mk_current_role', 'seller');
+    } catch (e) {}
+    return { success: true, message: `Sesión iniciada con éxito como ${target.name}` };
+  };
+
+  const loginDirectAsDriver = (): { success: boolean; message: string } => {
+    let target = users.find(u => u.role === 'driver' || u.username === 'carlos_moto');
+    if (!target) {
+      target = INITIAL_USERS.find(u => u.role === 'driver') || {
+        id: 'usr-driver-1',
+        name: 'Carlos Mendoza (Motorizado)',
+        username: 'carlos_moto',
+        email: 'carlos.moto@conforce.com',
+        role: 'driver',
+        status: 'active',
+        createdAt: '2026-07-01'
+      };
+      setUsers(prev => [target!, ...prev.filter(p => p.id !== target!.id)]);
+    }
+    setCurrentUser(target);
+    setCurrentRole('driver');
+    setActiveDriverTab('deliveries');
+    setIsCorporateAuthModalOpen(false);
+    try {
+      localStorage.setItem('mk_current_user', JSON.stringify(target));
+      localStorage.setItem('mk_current_role', 'driver');
     } catch (e) {}
     return { success: true, message: `Sesión iniciada con éxito como ${target.name}` };
   };
@@ -2963,6 +2992,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         switchRole,
         loginDirectAsAdmin,
         loginDirectAsSeller,
+        loginDirectAsDriver,
 
         // Modals & Links
         isClientAuthModalOpen,

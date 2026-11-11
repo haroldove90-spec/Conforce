@@ -191,29 +191,53 @@ export const MyOrdersView: React.FC = () => {
 
                   {/* Live Driver Tracking Card */}
                   {order.status === 'on_the_way' && order.driverName && (
-                    <div className="p-3 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl border border-red-200 flex items-center justify-between gap-3 animate-pulse">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-[#D4021D] text-white flex items-center justify-center font-bold">
-                          <Bike className="w-5 h-5" />
+                    <div className="p-3 bg-gradient-to-r from-red-50 via-orange-50 to-emerald-50 rounded-2xl border border-red-200 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-[#D4021D] text-white flex items-center justify-center font-bold">
+                            <Bike className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-extrabold text-slate-900 text-xs">
+                                Repartidor Asignado: {order.driverName}
+                              </p>
+                              <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                {order.driverStep === 'heading_to_store'
+                                  ? '🏪 Hacia la tienda'
+                                  : order.driverStep === 'picked_up'
+                                  ? '📦 Pedido en mano'
+                                  : order.driverStep === 'heading_to_client'
+                                  ? '🛵 En camino a tu puerta'
+                                  : 'En ruta'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600">
+                              Moto: {order.driverVehicle || 'Motocicleta'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-extrabold text-slate-900 text-xs">
-                            ¡Tu repartidor va en camino!
-                          </p>
-                          <p className="text-[11px] text-slate-600">
-                            {order.driverName} ({order.driverVehicle})
-                          </p>
-                        </div>
+
+                        {order.driverPhone && (
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={`tel:${order.driverPhone}`}
+                              className="px-2.5 py-1.5 bg-white border border-red-300 text-[#D4021D] font-bold text-[11px] rounded-xl hover:bg-red-50 transition-all flex items-center gap-1 shadow-2xs"
+                            >
+                              <Phone className="w-3 h-3" />
+                              <span>Llamar</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => openWhatsAppWithPrompt(order.driverPhone!, `¡Hola ${order.driverName}! Te escribo sobre mi pedido #${order.id} en ConForce.`)}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              <span>WhatsApp</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {order.driverPhone && (
-                        <a
-                          href={`tel:${order.driverPhone}`}
-                          className="px-2.5 py-1.5 bg-white border border-red-300 text-[#D4021D] font-bold text-[11px] rounded-xl hover:bg-red-50 transition-all flex items-center gap-1 shadow-2xs"
-                        >
-                          <Phone className="w-3 h-3" />
-                          <span>Llamar</span>
-                        </a>
-                      )}
                     </div>
                   )}
 

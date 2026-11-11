@@ -10,7 +10,8 @@ import {
   ArrowRight,
   AlertCircle,
   CheckCircle2,
-  KeyRound
+  KeyRound,
+  Bike
 } from 'lucide-react';
 
 export const CorporateAuthModal: React.FC = () => {
@@ -21,7 +22,9 @@ export const CorporateAuthModal: React.FC = () => {
     loginAsCorporate,
     loginDirectAsAdmin,
     loginDirectAsSeller,
-    openBusinessRegistration
+    loginDirectAsDriver,
+    openBusinessRegistration,
+    openDriverRegistration
   } = useApp();
 
   const [identifier, setIdentifier] = useState('');
@@ -42,6 +45,14 @@ export const CorporateAuthModal: React.FC = () => {
 
   const handleDirectSellerLogin = () => {
     const res = loginDirectAsSeller();
+    setSuccessMessage(res.message);
+    setTimeout(() => {
+      setIsCorporateAuthModalOpen(false);
+    }, 400);
+  };
+
+  const handleDirectDriverLogin = () => {
+    const res = loginDirectAsDriver();
     setSuccessMessage(res.message);
     setTimeout(() => {
       setIsCorporateAuthModalOpen(false);
@@ -205,7 +216,7 @@ export const CorporateAuthModal: React.FC = () => {
               <div className="flex-1 h-px bg-zinc-800" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => handleDirectAdminLogin('harold')}
@@ -216,7 +227,7 @@ export const CorporateAuthModal: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-white truncate">Harold Anguiano</div>
-                  <div className="text-[10px] text-zinc-400 truncate">Superadmin ConForce</div>
+                  <div className="text-[10px] text-zinc-400 truncate">Superadmin</div>
                 </div>
               </button>
 
@@ -230,10 +241,48 @@ export const CorporateAuthModal: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-white truncate">Admin Master</div>
-                  <div className="text-[10px] text-zinc-400 truncate">Dirección General</div>
+                  <div className="text-[10px] text-zinc-400 truncate">Dirección Gral</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDirectDriverLogin}
+                className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-500/50 text-left flex items-center gap-2.5 transition-all cursor-pointer group"
+                title="Acceso directo como Mensajero en Moto"
+              >
+                <div className="w-8 h-8 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                  <Bike className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-white truncate">Carlos Mendoza</div>
+                  <div className="text-[10px] text-emerald-400 font-semibold truncate">Mensajero Moto</div>
                 </div>
               </button>
             </div>
+          </div>
+
+          {/* Courier / Motorizado Banner */}
+          <div className="p-4 bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-black border border-emerald-900/40 rounded-2xl flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <Bike className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">¿Tienes moto y buscas ingresos?</h4>
+                <p className="text-[11px] text-zinc-400">Únete a la flota de Mensajeros y cobra por Pago Móvil</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsCorporateAuthModalOpen(false);
+                openDriverRegistration();
+              }}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shrink-0 transition-colors shadow cursor-pointer"
+            >
+              Registrar Moto
+            </button>
           </div>
 
           {/* Business Registration Banner */}
