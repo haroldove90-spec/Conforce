@@ -25,7 +25,8 @@ import {
   KeyRound,
   Check,
   X,
-  Bike
+  Bike,
+  ShieldCheck
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -57,7 +58,8 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
     installPWA,
     isAppInstalled,
     setIsClientAuthModalOpen,
-    setIsCorporateAuthModalOpen
+    setIsCorporateAuthModalOpen,
+    openCorporateAuth
   } = useApp();
 
   const [copiedLink, setCopiedLink] = useState(false);
@@ -409,18 +411,40 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
               className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#D4021D] hover:bg-[#b50218] text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
             >
               <LogIn className="w-4 h-4" />
-              <span>Entrar como Cliente</span>
+              <span>Formulario Cliente</span>
             </button>
 
             <button
               onClick={() => {
-                setIsCorporateAuthModalOpen(true);
+                openCorporateAuth('seller');
                 if (isDrawer) setIsMobileMenuOpen(false);
               }}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-red-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-500 text-zinc-100 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <KeyRound className="w-4 h-4 text-[#D4021D]" />
-              <span>Formulario Admin / Negocio 🛡️</span>
+              <Store className="w-4 h-4 text-zinc-300" />
+              <span>Formulario Negocios</span>
+            </button>
+
+            <button
+              onClick={() => {
+                openCorporateAuth('driver');
+                if (isDrawer) setIsMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-emerald-700/60 hover:border-emerald-500 text-emerald-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <Bike className="w-4 h-4 text-emerald-400" />
+              <span>Formulario Mensajeros</span>
+            </button>
+
+            <button
+              onClick={() => {
+                openCorporateAuth('admin');
+                if (isDrawer) setIsMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-red-800/60 hover:border-red-600 text-red-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <ShieldCheck className="w-4 h-4 text-[#D4021D]" />
+              <span>Formulario Admin</span>
             </button>
           </div>
         )}

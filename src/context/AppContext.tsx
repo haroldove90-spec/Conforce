@@ -228,6 +228,9 @@ interface AppContextType {
   setIsClientAuthModalOpen: (open: boolean) => void;
   isCorporateAuthModalOpen: boolean;
   setIsCorporateAuthModalOpen: (open: boolean) => void;
+  corporateAuthInitialTab: 'admin' | 'seller' | 'driver';
+  setCorporateAuthInitialTab: (tab: 'admin' | 'seller' | 'driver') => void;
+  openCorporateAuth: (tab?: 'admin' | 'seller' | 'driver') => void;
   isRegisterBusinessModalOpen: boolean;
   setIsRegisterBusinessModalOpen: (open: boolean) => void;
   isRegisteringAsSponsor: boolean;
@@ -601,11 +604,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Modals for Auth
   const [isClientAuthModalOpen, setIsClientAuthModalOpen] = useState(false);
   const [isCorporateAuthModalOpen, setIsCorporateAuthModalOpen] = useState(false);
+  const [corporateAuthInitialTab, setCorporateAuthInitialTab] = useState<'admin' | 'seller' | 'driver'>('admin');
   const [isRegisterBusinessModalOpen, setIsRegisterBusinessModalOpen] = useState(false);
   const [isRegisteringAsSponsor, setIsRegisteringAsSponsor] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [clientAuthIntent, setClientAuthIntent] = useState<'login' | 'register' | 'order_checkout'>('login');
+
+  const openCorporateAuth = (tab: 'admin' | 'seller' | 'driver' = 'admin') => {
+    setCorporateAuthInitialTab(tab);
+    setIsCorporateAuthModalOpen(true);
+  };
 
   const openBusinessRegistration = (forClientUpgrade = false, asSponsor = false) => {
     setIsRegisteringAsSponsor(asSponsor);
@@ -2999,6 +3008,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsClientAuthModalOpen,
         isCorporateAuthModalOpen,
         setIsCorporateAuthModalOpen,
+        corporateAuthInitialTab,
+        setCorporateAuthInitialTab,
+        openCorporateAuth,
         isRegisterBusinessModalOpen,
         setIsRegisterBusinessModalOpen,
         isRegisteringAsSponsor,

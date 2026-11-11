@@ -21,7 +21,8 @@ import {
   SlidersHorizontal,
   Share2,
   User,
-  ShieldCheck
+  ShieldCheck,
+  Bike
 } from 'lucide-react';
 
 interface ClientExploreProps {
@@ -54,6 +55,8 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
     setClientAuthIntent,
     getMarketplaceShareUrl,
     openBusinessRegistration,
+    openCorporateAuth,
+    openDriverRegistration,
     isMockDataCleared
   } = useApp();
 
@@ -245,72 +248,130 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
         </div>
       </div>
 
-      {/* Independent Client Portal Access & Registration Card */}
-      <div className="bg-gradient-to-r from-black via-zinc-950 to-red-950 border border-zinc-800 rounded-2xl p-3.5 sm:p-4 text-white shadow-md relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
-          <div className="space-y-1">
+      {/* Portales y Formularios de Acceso por Perfil (Visibles para todos los usuarios) */}
+      <div className="bg-gradient-to-br from-black via-zinc-950 to-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 text-white shadow-xl space-y-3.5 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+          <div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 bg-[#D4021D] text-white text-[10px] font-black rounded-md tracking-wider uppercase shadow-xs">
-                Portal Cliente
+                Acceso por Rol
               </span>
               <span className="text-[11px] text-zinc-400 font-mono">
-                /marketplace
+                ConForce Marketplace Venezuela
               </span>
             </div>
-            <h3 className="font-extrabold text-sm sm:text-base text-white">
-              {currentUser?.role === 'client'
-                ? `¡Bienvenido de vuelta, ${currentUser.name}!`
-                : 'ConForce Marketplace — Catálogo y Pedidos'}
-            </h3>
-            <p className="text-xs text-zinc-300 max-w-lg leading-relaxed">
-              {currentUser?.role === 'client'
-                ? 'Tu cuenta está activa con entrega prioritaria. Explora productos, tiendas, farmacias, restaurantes, tecnología y repuestos.'
-                : 'Navega libremente. Si deseas pedir un producto o servicio, podrás iniciar sesión o registrarte al instante.'}
-            </p>
+            <h2 className="text-base sm:text-lg font-black text-white mt-0.5">
+              Formularios de Acceso & Registro
+            </h2>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {/* Share link button */}
-            <button
-              onClick={handleCopyLink}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs ${
-                copiedLinkToast
-                  ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300'
-                  : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200 hover:text-white'
-              }`}
-              title="Copiar link independiente para compartir solo a clientes"
-            >
-              {copiedLinkToast ? (
-                <>
-                  <Check className="w-4 h-4 text-emerald-400" />
-                  <span>¡Link Copiado!</span>
-                </>
-              ) : (
-                <>
-                  <Share2 className="w-4 h-4 text-[#D4021D]" />
-                  <span>Compartir Link</span>
-                </>
-              )}
-            </button>
-
-            {/* Auth button */}
-            {!currentUser ? (
-              <button
-                onClick={() => {
-                  setClientAuthIntent('login');
-                  setIsClientAuthModalOpen(true);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-[#D4021D] hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-red-950 cursor-pointer active:scale-95"
-              >
-                <User className="w-4 h-4" />
-                <span>Entrar / Registrarme</span>
-              </button>
+          {/* Quick share button */}
+          <button
+            onClick={handleCopyLink}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs self-start sm:self-auto ${
+              copiedLinkToast
+                ? 'bg-emerald-950 border-emerald-600 text-emerald-300'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white'
+            }`}
+            title="Copiar enlace directo de la vitrina"
+          >
+            {copiedLinkToast ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>¡Link Copiado!</span>
+              </>
             ) : (
-              <div className="px-3 py-1.5 bg-emerald-950/60 border border-emerald-800/60 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5" />
-                <span>Cuenta Verificada</span>
-              </div>
+              <>
+                <Share2 className="w-3.5 h-3.5 text-[#D4021D]" />
+                <span>Compartir</span>
+              </>
             )}
+          </button>
+        </div>
+
+        {/* 4 Dedicated Visual Access Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          {/* Card 1: Cliente Comprador */}
+          <div className="bg-zinc-900/90 border border-zinc-800 hover:border-red-600/50 rounded-2xl p-3 flex flex-col justify-between transition-all group shadow-xs">
+            <div className="space-y-1">
+              <div className="w-8 h-8 rounded-xl bg-red-600/20 text-red-400 flex items-center justify-center mb-1 group-hover:bg-[#D4021D] group-hover:text-white transition-colors">
+                <ShoppingBag className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-xs text-white">Clientes Compradores</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                Compras, carrito y rastreo de entregas.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setClientAuthIntent('login');
+                setIsClientAuthModalOpen(true);
+              }}
+              className="mt-2.5 w-full py-1.5 px-2 bg-[#D4021D] hover:bg-red-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer text-center"
+            >
+              Formulario Cliente
+            </button>
+          </div>
+
+          {/* Card 2: Negocios & Tiendas */}
+          <div className="bg-zinc-900/90 border border-zinc-800 hover:border-zinc-600 rounded-2xl p-3 flex flex-col justify-between transition-all group shadow-xs">
+            <div className="space-y-1">
+              <div className="w-8 h-8 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center mb-1 group-hover:bg-zinc-700 group-hover:text-white transition-colors">
+                <Store className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-xs text-white">Comercios & Tiendas</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                Catálogo, inventario y gestión de pedidos.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openCorporateAuth('seller')}
+              className="mt-2.5 w-full py-1.5 px-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer text-center"
+            >
+              Formulario Negocios
+            </button>
+          </div>
+
+          {/* Card 3: Mensajeros en Moto */}
+          <div className="bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-3 flex flex-col justify-between transition-all group shadow-xs">
+            <div className="space-y-1">
+              <div className="w-8 h-8 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center mb-1 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                <Bike className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-xs text-white">Mensajeros en Moto</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                Despachos en vivo y billetera Pago Móvil.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openCorporateAuth('driver')}
+              className="mt-2.5 w-full py-1.5 px-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer text-center"
+            >
+              Formulario Mensajeros
+            </button>
+          </div>
+
+          {/* Card 4: Superadmin */}
+          <div className="bg-zinc-900/90 border border-zinc-800 hover:border-red-600/50 rounded-2xl p-3 flex flex-col justify-between transition-all group shadow-xs">
+            <div className="space-y-1">
+              <div className="w-8 h-8 rounded-lg bg-red-950/60 text-red-400 flex items-center justify-center mb-1 group-hover:bg-[#D4021D] group-hover:text-white transition-colors">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-xs text-white">Superadministrador</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                Harold Anguiano y Control General.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openCorporateAuth('admin')}
+              className="mt-2.5 w-full py-1.5 px-2 bg-zinc-800 hover:bg-red-950 text-red-200 border border-red-900/60 rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer text-center"
+            >
+              Formulario Admin
+            </button>
           </div>
         </div>
       </div>

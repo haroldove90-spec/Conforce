@@ -32,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
     isLocating,
     setIsClientAuthModalOpen,
     setIsCorporateAuthModalOpen,
+    openCorporateAuth,
     setIsProfileModalOpen,
     navigateToHome,
     isMobileMenuOpen,
@@ -39,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
   } = useApp();
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showRoleAccessDropdown, setShowRoleAccessDropdown] = useState(false);
 
   const getRoleDisplay = () => {
     switch (currentRole) {
@@ -219,27 +221,98 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
               </button>
             </div>
           ) : (
-            /* Login / Register Buttons when not logged in */
-            <div className="flex items-center gap-1.5">
+            /* Login / Register Buttons for all 4 profiles */
+            <div className="flex items-center gap-1 sm:gap-1.5 relative">
+              {/* 1. Cliente Final */}
               <button
                 onClick={() => setIsClientAuthModalOpen(true)}
-                className="flex items-center gap-1.5 bg-[#D4021D] hover:bg-[#b50218] text-white px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
-                title="Iniciar Sesión o Registrarse como Cliente"
+                className="flex items-center gap-1 bg-[#D4021D] hover:bg-[#b50218] text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                title="Formulario de Acceso y Registro para Clientes"
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Entrar Cliente</span>
-                <span className="sm:hidden">Cliente</span>
+                <span>Cliente</span>
               </button>
 
+              {/* 2. Negocios (Desktop) */}
               <button
-                onClick={() => setIsCorporateAuthModalOpen(true)}
-                className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-red-600/60 text-zinc-200 hover:text-white px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
-                title="Formulario de Acceso para Administradores y Negocios"
+                onClick={() => openCorporateAuth('seller')}
+                className="hidden md:flex items-center gap-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-500 text-zinc-200 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                title="Formulario de Acceso para Comercios y Tiendas"
+              >
+                <Store className="w-3.5 h-3.5 text-zinc-300" />
+                <span>Negocio</span>
+              </button>
+
+              {/* 3. Mensajeros en Moto (Desktop) */}
+              <button
+                onClick={() => openCorporateAuth('driver')}
+                className="hidden md:flex items-center gap-1 bg-zinc-900 hover:bg-zinc-800 border border-emerald-700/60 hover:border-emerald-500 text-emerald-300 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                title="Formulario de Acceso para Mensajeros en Moto"
+              >
+                <Bike className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Mensajero</span>
+              </button>
+
+              {/* 4. Superadmin (Desktop) */}
+              <button
+                onClick={() => openCorporateAuth('admin')}
+                className="hidden md:flex items-center gap-1 bg-zinc-900 hover:bg-zinc-800 border border-red-800/60 hover:border-red-600 text-red-300 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                title="Formulario de Acceso Superadministrador"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-[#D4021D]" />
-                <span className="hidden sm:inline">Acceso Admin</span>
-                <span className="sm:hidden">Admin</span>
+                <span>Admin</span>
               </button>
+
+              {/* Mobile Role Switcher Menu Trigger (< md) */}
+              <div className="md:hidden relative">
+                <button
+                  type="button"
+                  onClick={() => setShowRoleAccessDropdown(!showRoleAccessDropdown)}
+                  className="flex items-center gap-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white px-2 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="Más formularios de acceso"
+                >
+                  <span>Roles</span>
+                  <ChevronDown className="w-3 h-3 opacity-70" />
+                </button>
+
+                {showRoleAccessDropdown && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-52 bg-zinc-950 border border-zinc-800 rounded-2xl p-2 shadow-2xl z-50 text-xs text-white animate-fade-in space-y-1"
+                    onClick={() => setShowRoleAccessDropdown(false)}
+                  >
+                    <p className="px-2 py-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                      Formularios de Acceso
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => openCorporateAuth('seller')}
+                      className="w-full text-left px-2.5 py-2 hover:bg-zinc-900 rounded-xl flex items-center gap-2 text-zinc-200 cursor-pointer font-bold"
+                    >
+                      <Store className="w-4 h-4 text-zinc-300" />
+                      <span>Formulario Negocios</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openCorporateAuth('driver')}
+                      className="w-full text-left px-2.5 py-2 hover:bg-zinc-900 rounded-xl flex items-center gap-2 text-emerald-400 cursor-pointer font-bold"
+                    >
+                      <Bike className="w-4 h-4 text-emerald-400" />
+                      <span>Formulario Mensajeros</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openCorporateAuth('admin')}
+                      className="w-full text-left px-2.5 py-2 hover:bg-zinc-900 rounded-xl flex items-center gap-2 text-red-400 cursor-pointer font-bold"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-[#D4021D]" />
+                      <span>Formulario Admin</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

@@ -49,19 +49,6 @@ const PulsoAppContent: React.FC = () => {
     setActiveClientTab('orders');
   };
 
-  // If visiting the corporate root route and not logged in as Admin or Seller, show Corporate Portal Home
-  if (currentRoute === 'corporate' && (!currentUser || currentUser.role === 'client')) {
-    return (
-      <div className="min-h-screen w-full bg-white font-sans selection:bg-[#D4021D] selection:text-white overflow-y-auto overflow-x-hidden">
-        <CorporatePortalHome />
-        <RegisterBusinessModal />
-        <CorporateAuthModal />
-        <ClientAuthModal />
-        <UserProfileModal />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-white text-slate-900 flex flex-col font-sans selection:bg-[#D4021D] selection:text-white">
       
