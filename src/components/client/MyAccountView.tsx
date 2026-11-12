@@ -59,7 +59,7 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
     addSavedAddress({
       label: newLabel.trim(),
       address: newAddressText.trim(),
-      coordinates: userLocation || { lat: 19.4120, lng: -99.1650 },
+      coordinates: userLocation || { lat: 10.4806, lng: -66.9036 },
       isDefault: false
     });
     setNewLabel('');

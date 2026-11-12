@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { useApp } from '../../context/AppContext';
 import { Business, BusinessCategory } from '../../types';
 import { getBusinessScheduleStatus } from '../../utils/scheduleUtils';
 import {
   Navigation,
   MapPin,
-  Phone,
   MessageCircle,
   Clock,
   Star,
@@ -14,14 +15,41 @@ import {
   LocateFixed,
   ZoomIn,
   ZoomOut,
-  ChevronRight,
-  Flame
+  ChevronRight
 } from 'lucide-react';
 
 interface InteractiveMapProps {
   onSelectBusiness?: (business: Business) => void;
   selectedCategory?: 'all' | BusinessCategory | 'offers';
 }
+
+const DEFAULT_VENEZUELA_COORDS: [number, number] = [10.4806, -66.9036];
+const DEFAULT_MAP_ZOOM = 13;
+
+// Venezuelan Cities
+const VENEZUELAN_CITIES = [
+  { name: 'Caracas (Distrito Capital)', lat: 10.4806, lng: -66.9036 },
+  { name: 'Valencia (Carabobo)', lat: 10.1620, lng: -68.0077 },
+  { name: 'Maracaibo (Zulia)', lat: 10.6545, lng: -71.6426 },
+  { name: 'Barquisimeto (Lara)', lat: 10.0647, lng: -69.3570 },
+  { name: 'Maracay (Aragua)', lat: 10.2469, lng: -67.5958 },
+  { name: 'Lechería / PLC (Anzoátegui)', lat: 10.1983, lng: -64.6931 }
+];
+
+const TILE_LAYERS: Record<'streets' | 'dark' | 'satellite', { url: string; attribution: string }> = {
+  streets: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors'
+  },
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri'
+  }
+};
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onSelectBusiness,
@@ -35,29 +63,36 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     openExternalNavigation,
     detectUserLocation,
     isLocating,
-    openWhatsAppWithPrompt
+    openWhatsAppWithPrompt,
+    setUserCustomLocation
   } = useApp();
 
   const [activeBiz, setActiveBiz] = useState<Business | null>(null);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [mapLayer, setMapLayer] = useState<'dark' | 'satellite' | 'streets'>('streets');
   const [showCoverageRadius, setShowCoverageRadius] = useState<boolean>(true);
-
-  // Venezuelan Cities
-  const VENEZUELAN_CITIES = [
-    { name: 'Caracas (Distrito Capital)', lat: 10.4806, lng: -66.9036 },
-    { name: 'Valencia (Carabobo)', lat: 10.1620, lng: -68.0077 },
-    { name: 'Maracaibo (Zulia)', lat: 10.6545, lng: -71.6426 },
-    { name: 'Barquisimeto (Lara)', lat: 10.0647, lng: -69.3570 },
-    { name: 'Maracay (Aragua)', lat: 10.2469, lng: -67.5958 },
-    { name: 'Lechería / PLC (Anzoátegui)', lat: 10.1983, lng: -64.6931 }
-  ];
-
   const [selectedCity, setSelectedCity] = useState(VENEZUELAN_CITIES[0]);
 
-  // Center coordinate reference: Venezuela GPS or Selected Venezuelan City
-  const centerLat = userLocation?.lat || selectedCity.lat;
-  const centerLng = userLocation?.lng || selectedCity.lng;
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const radiusLayerRef = useRef<L.Circle | null>(null);
+
+  // Guard against stale Mexico coords if any existed in runtime
+  const isMexicoCoords = (lat?: number, lng?: number) =>
+    typeof lat === 'number' && typeof lng === 'number' && lat > 14 && lat < 25 && lng < -90;
+
+  const safeUserLat =
+    userLocation && !isMexicoCoords(userLocation.lat, userLocation.lng)
+      ? userLocation.lat
+      : DEFAULT_VENEZUELA_COORDS[0];
+  const safeUserLng =
+    userLocation && !isMexicoCoords(userLocation.lat, userLocation.lng)
+      ? userLocation.lng
+      : DEFAULT_VENEZUELA_COORDS[1];
+
+  const centerLat = safeUserLat || selectedCity.lat;
+  const centerLng = safeUserLng || selectedCity.lng;
 
   // Filter businesses according to prop
   const filteredBusinesses = businesses.filter((biz) => {
@@ -69,74 +104,191 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     return biz.category === selectedCategory;
   });
 
-  // Calculate SVG projection coordinates relative to center
-  const getSvgCoordinates = (lat: number, lng: number) => {
-    const latSpan = 0.08 / zoomLevel;
-    const lngSpan = 0.09 / zoomLevel;
+  // 1. Initialize Leaflet Map once on mount centered at Venezuela [10.4806, -66.9036] with zoom 13
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
 
-    // x: 0 to 100%, y: 0 to 100%
-    const x = ((lng - (centerLng - lngSpan / 2)) / lngSpan) * 100;
-    const y = ((centerLat + latSpan / 2 - lat) / latSpan) * 100;
+    const initialCenter: [number, number] = [centerLat, centerLng];
+    const map = L.map(mapContainerRef.current, {
+      center: initialCenter,
+      zoom: DEFAULT_MAP_ZOOM,
+      zoomControl: false,
+      attributionControl: false
+    });
 
-    // Clamp inside viewport
-    const clampedX = Math.max(8, Math.min(92, x));
-    const clampedY = Math.max(10, Math.min(90, y));
+    const initialTile = L.tileLayer(TILE_LAYERS[mapLayer].url, {
+      maxZoom: 19
+    }).addTo(map);
 
-    return { x: clampedX, y: clampedY };
+    const markersGroup = L.layerGroup().addTo(map);
+
+    mapRef.current = map;
+    tileLayerRef.current = initialTile;
+    markersLayerRef.current = markersGroup;
+
+    // Ensure clean layout resize after container paint
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 120);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      tileLayerRef.current = null;
+      markersLayerRef.current = null;
+      radiusLayerRef.current = null;
+    };
+  }, []);
+
+  // 2. Switch map tile layer (Calles / Noche / Satélite)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    tileLayerRef.current = L.tileLayer(TILE_LAYERS[mapLayer].url, {
+      maxZoom: 19
+    }).addTo(map);
+  }, [mapLayer]);
+
+  // 3. Re-center map smoothly when userLocation updates
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !userLocation) return;
+    if (isMexicoCoords(userLocation.lat, userLocation.lng)) return;
+
+    map.setView([userLocation.lat, userLocation.lng], DEFAULT_MAP_ZOOM, { animate: true });
+  }, [userLocation?.lat, userLocation?.lng]);
+
+  // 4. Render markers & coverage circle whenever businesses, activeBiz, category, or center changes
+  useEffect(() => {
+    const map = mapRef.current;
+    const markersGroup = markersLayerRef.current;
+    if (!map || !markersGroup) return;
+
+    markersGroup.clearLayers();
+
+    // Coverage radius circle around center
+    if (radiusLayerRef.current) {
+      map.removeLayer(radiusLayerRef.current);
+      radiusLayerRef.current = null;
+    }
+
+    if (showCoverageRadius) {
+      radiusLayerRef.current = L.circle([centerLat, centerLng], {
+        radius: 2500,
+        color: '#D4021D',
+        weight: 1.5,
+        dashArray: '6 6',
+        fillColor: '#D4021D',
+        fillOpacity: 0.08
+      }).addTo(map);
+    }
+
+    // User location marker
+    const userIcon = L.divIcon({
+      className: 'conforce-user-pin',
+      html: `
+        <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
+          <span class="animate-ping" style="position:absolute;width:28px;height:28px;border-radius:9999px;background:#D4021D;opacity:0.65;"></span>
+          <div style="position:relative;width:16px;height:16px;border-radius:9999px;background:#D4021D;border:2.5px solid #ffffff;box-shadow:0 4px 12px rgba(212,2,29,0.5);"></div>
+          <span style="margin-top:4px;padding:2px 6px;background:rgba(255,255,255,0.96);border:1px solid #e2e8f0;border-radius:6px;font-size:9px;font-weight:800;color:#D4021D;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.12);">
+            Tú estás aquí
+          </span>
+        </div>
+      `,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
+    });
+
+    L.marker([centerLat, centerLng], { icon: userIcon, zIndexOffset: 500 }).addTo(markersGroup);
+
+    // Business pins
+    filteredBusinesses.forEach((biz) => {
+      const bLat = biz.coordinates?.lat;
+      const bLng = biz.coordinates?.lng;
+      if (typeof bLat !== 'number' || typeof bLng !== 'number') return;
+
+      const isSelected = activeBiz?.id === biz.id;
+      const distance = calculateDistance(biz.coordinates);
+      const hasOffer = products.some((p) => p.businessId === biz.id && p.isOfferOfTheDay);
+      const pinColor = biz.customPinColor || '#D4021D';
+      const shortName = biz.name.split(' ')[0];
+
+      const bizIcon = L.divIcon({
+        className: 'conforce-biz-pin',
+        html: `
+          <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);cursor:pointer;">
+            ${
+              hasOffer
+                ? `<span style="position:absolute;top:-8px;right:-6px;width:18px;height:18px;border-radius:9999px;background:#f59e0b;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);z-index:10;">🔥</span>`
+                : ''
+            }
+            <div style="width:42px;height:42px;border-radius:14px;background:${pinColor};border:2.5px solid ${
+              isSelected ? '#D4021D' : '#ffffff'
+            };display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:${
+              isSelected ? '0 0 0 4px rgba(212,2,29,0.35), 0 10px 20px rgba(0,0,0,0.28)' : '0 6px 14px rgba(0,0,0,0.22)'
+            };transform:${isSelected ? 'scale(1.12)' : 'scale(1)'};transition:transform 0.15s ease;">
+              ${biz.logo}
+            </div>
+            <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${pinColor};margin-top:-1px;"></div>
+            <div style="margin-top:2px;padding:2px 7px;background:rgba(255,255,255,0.96);border:1px solid #e2e8f0;border-radius:9999px;box-shadow:0 2px 6px rgba(0,0,0,0.14);font-size:10px;font-weight:700;color:#1e293b;white-space:nowrap;display:flex;align-items:center;gap:4px;">
+              <span>${shortName}</span>
+              <span style="color:#D4021D;font-weight:700;">· ${distance}km</span>
+            </div>
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0]
+      });
+
+      const marker = L.marker([bLat, bLng], {
+        icon: bizIcon,
+        zIndexOffset: isSelected ? 400 : 100
+      });
+
+      marker.on('click', () => {
+        setActiveBiz(biz);
+        map.panTo([bLat, bLng], { animate: true });
+      });
+
+      marker.addTo(markersGroup);
+    });
+  }, [filteredBusinesses, activeBiz, centerLat, centerLng, showCoverageRadius, products, calculateDistance]);
+
+  const handleCityChange = (cityName: string) => {
+    const found = VENEZUELAN_CITIES.find((c) => c.name === cityName);
+    if (!found) return;
+    setSelectedCity(found);
+    setUserCustomLocation({ lat: found.lat, lng: found.lng }, `${found.name}, Venezuela`);
+    if (mapRef.current) {
+      mapRef.current.setView([found.lat, found.lng], DEFAULT_MAP_ZOOM, { animate: true });
+    }
   };
-
-  const userSvgPos = getSvgCoordinates(centerLat, centerLng);
 
   return (
     <div className="relative w-full h-[420px] md:h-[540px] rounded-3xl overflow-hidden border border-slate-200 bg-slate-100 shadow-md select-none">
-      {/* Map Canvas Background Layers */}
-      <div className={`absolute inset-0 transition-all duration-500 ${
-        mapLayer === 'satellite'
-          ? 'bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0a1628] to-[#040810]'
-          : mapLayer === 'streets'
-          ? 'bg-[#f1f5f9] bg-[linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] bg-[size:28px_28px]'
-          : 'bg-[#0f172a] bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:20px_20px]'
-      }`}>
-        {/* Stylized street vectors */}
-        <svg className={`absolute inset-0 w-full h-full pointer-events-none ${mapLayer === 'dark' || mapLayer === 'satellite' ? 'opacity-30 stroke-slate-600' : 'opacity-40 stroke-slate-400'}`} xmlns="http://www.w3.org/2000/svg">
-          <path d="M 0 100 Q 250 150 500 120 T 1000 220" fill="none" strokeWidth="4" strokeDasharray="6 4" />
-          <path d="M 120 0 Q 180 300 350 600" fill="none" strokeWidth="6" />
-          <path d="M 600 0 Q 550 250 850 600" fill="none" strokeWidth="5" />
-          <path d="M 0 350 Q 400 320 1000 420" fill="none" strokeWidth="6" />
-          <circle cx="50%" cy="50%" r="180" fill="none" stroke="#D4021D" strokeWidth="1" strokeDasharray="4 8" opacity="0.35" />
-          <circle cx="50%" cy="50%" r="280" fill="none" stroke="#D4021D" strokeWidth="1" strokeDasharray="4 8" opacity="0.2" />
-        </svg>
-
-        {/* Coverage Radius Circles around User */}
-        {showCoverageRadius && (
-          <div
-            className="absolute rounded-full border border-red-600/30 bg-red-500/10 pointer-events-none transform -translate-x-1/2 -translate-y-1/2 animate-pulse-ring"
-            style={{
-              left: `${userSvgPos.x}%`,
-              top: `${userSvgPos.y}%`,
-              width: '260px',
-              height: '260px'
-            }}
-          />
-        )}
-      </div>
+      {/* Real Leaflet Map Container */}
+      <div ref={mapContainerRef} className="w-full h-full z-0" />
 
       {/* Top Map Layer Controls & Venezuelan City Selector */}
-      <div className="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 z-20 pointer-events-auto">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 z-20 pointer-events-none">
+        <div className="flex items-center gap-1.5 flex-wrap pointer-events-auto">
           {/* City selector dropdown for Venezuela */}
           <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-200 shadow-md text-xs font-bold text-slate-800">
             <span className="text-sm">🇻🇪</span>
             <select
               value={selectedCity.name}
-              onChange={(e) => {
-                const found = VENEZUELAN_CITIES.find(c => c.name === e.target.value);
-                if (found) setSelectedCity(found);
-              }}
+              onChange={(e) => handleCityChange(e.target.value)}
               className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer text-xs"
             >
-              {VENEZUELAN_CITIES.map(c => (
-                <option key={c.name} value={c.name}>{c.name}</option>
+              {VENEZUELAN_CITIES.map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
@@ -171,7 +323,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
         <button
           onClick={() => setShowCoverageRadius(!showCoverageRadius)}
-          className={`p-2 rounded-xl border backdrop-blur-md shadow-md transition-colors cursor-pointer ${
+          className={`p-2 rounded-xl border backdrop-blur-md shadow-md transition-colors cursor-pointer pointer-events-auto ${
             showCoverageRadius
               ? 'bg-red-50 border-red-300 text-[#D4021D]'
               : 'bg-white/95 border-slate-200 text-slate-600 hover:text-slate-900'
@@ -185,7 +337,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       {/* Right Map Actions (Zoom & Locate) */}
       <div className="absolute right-3 top-16 flex flex-col gap-2 z-20">
         <button
-          onClick={detectUserLocation}
+          onClick={() => {
+            detectUserLocation();
+            if (mapRef.current) {
+              mapRef.current.setView([centerLat, centerLng], DEFAULT_MAP_ZOOM, { animate: true });
+            }
+          }}
           disabled={isLocating}
           className="p-2.5 bg-white/95 hover:bg-slate-100 text-[#D4021D] border border-slate-200 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center cursor-pointer"
           title="Centrar en mi ubicación GPS"
@@ -193,89 +350,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <LocateFixed className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
         </button>
         <button
-          onClick={() => setZoomLevel((z) => Math.min(2, z + 0.25))}
+          onClick={() => mapRef.current?.zoomIn()}
           className="p-2.5 bg-white/95 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center cursor-pointer"
           title="Acercar"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button
-          onClick={() => setZoomLevel((z) => Math.max(0.75, z - 0.25))}
+          onClick={() => mapRef.current?.zoomOut()}
           className="p-2.5 bg-white/95 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center cursor-pointer"
           title="Alejar"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-      </div>
-
-      {/* Interactive Business Map Markers (Custom Pin with Logo) */}
-      <div className="absolute inset-0 z-10">
-        {/* User Real GPS Marker */}
-        <div
-          className="absolute transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-auto"
-          style={{ left: `${userSvgPos.x}%`, top: `${userSvgPos.y}%` }}
-        >
-          <div className="relative flex items-center justify-center">
-            <span className="animate-ping absolute inline-flex h-7 w-7 rounded-full bg-[#D4021D] opacity-75" />
-            <div className="relative w-4 h-4 rounded-full bg-[#D4021D] border-2 border-white shadow-lg shadow-[#D4021D]/50" />
-            <span className="absolute -bottom-5 px-1.5 py-0.5 bg-white/95 border border-slate-200 rounded text-[9px] font-bold text-[#D4021D] whitespace-nowrap shadow-xs">
-              Tú estás aquí
-            </span>
-          </div>
-        </div>
-
-        {/* Business Custom Pins */}
-        {filteredBusinesses.map((biz) => {
-          const pos = getSvgCoordinates(biz.coordinates.lat, biz.coordinates.lng);
-          const isSelected = activeBiz?.id === biz.id;
-          const distance = calculateDistance(biz.coordinates);
-          const hasOffer = products.some((p) => p.businessId === biz.id && p.isOfferOfTheDay);
-
-          return (
-            <div
-              key={biz.id}
-              onClick={() => setActiveBiz(biz)}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer z-20 group transition-transform duration-200 hover:scale-125"
-              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-            >
-              <div className="relative flex flex-col items-center">
-                {/* Notification flame for offers */}
-                {hasOffer && (
-                  <span className="absolute -top-3 -right-2 w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center shadow-lg animate-bounce">
-                    🔥
-                  </span>
-                )}
-
-                {/* Pin Header with Business Custom Logo */}
-                <div
-                  className={`relative flex items-center justify-center w-11 h-11 rounded-2xl shadow-xl border-2 transition-all ${
-                    isSelected
-                      ? 'ring-4 ring-[#D4021D] shadow-2xl scale-110'
-                      : 'hover:ring-2 hover:ring-red-400'
-                  }`}
-                  style={{
-                    backgroundColor: biz.customPinColor || '#D4021D',
-                    borderColor: '#ffffff'
-                  }}
-                >
-                  <span className="text-xl drop-shadow">{biz.logo}</span>
-                </div>
-
-                {/* Pin Arrow Tip */}
-                <div
-                  className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] -mt-0.5"
-                  style={{ borderTopColor: biz.customPinColor || '#D4021D' }}
-                />
-
-                {/* Floating mini pill with name & distance */}
-                <div className="mt-1 px-2 py-0.5 bg-white/95 border border-slate-200 rounded-full shadow-md text-[10px] font-bold text-slate-800 whitespace-nowrap flex items-center gap-1 group-hover:border-red-400">
-                  <span>{biz.name.split(' ')[0]}</span>
-                  <span className="text-[#D4021D] font-semibold">· {distance}km</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       {/* Selected Business Bottom Card (Popup) */}
@@ -364,7 +451,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
             {/* Direct WhatsApp chat */}
             <button
-              onClick={() => openWhatsAppWithPrompt(`¡Hola *${activeBiz.name}*! 👋 Vi su ubicación en el mapa de ConForce Marketplace y deseo hacer un pedido.`, activeBiz.id)}
+              onClick={() =>
+                openWhatsAppWithPrompt(
+                  `¡Hola *${activeBiz.name}*! 👋 Vi su ubicación en el mapa de ConForce Marketplace y deseo hacer un pedido.`,
+                  activeBiz.id
+                )
+              }
               className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
             >
               <MessageCircle className="w-3.5 h-3.5 text-white" />
@@ -382,7 +474,6 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           </button>
         </div>
       )}
-
     </div>
   );
 };

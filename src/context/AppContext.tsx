@@ -516,7 +516,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       role: 'admin' as Role,
       status: 'active' as const,
       department: 'Dirección General & Superadministración',
-      phone: '+52 55 9988 7766',
+      phone: '+58 412 9988776',
       createdAt: '2026-01-01',
       lastLogin: '2026-09-21 18:00'
     };
@@ -529,7 +529,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       role: 'admin' as Role,
       status: 'active' as const,
       department: 'Dirección General & Superadministración',
-      phone: '+52 55 1122 3344',
+      phone: '+58 412 1122334',
       createdAt: '2026-01-15',
       lastLogin: '2026-09-03 21:30'
     };
@@ -833,7 +833,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           role: 'admin',
           status: 'active',
           department: 'Dirección General & Superadministración',
-          phone: '+52 55 1122 3344',
+          phone: '+58 412 1122334',
           createdAt: '2026-01-15',
           lastLogin: 'Justo ahora'
         };
@@ -868,7 +868,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           role: 'admin',
           status: 'active',
           department: 'Dirección General & Superadministración',
-          phone: '+52 55 9988 7766',
+          phone: '+58 412 9988776',
           createdAt: '2026-01-01',
           lastLogin: 'Justo ahora'
         };
@@ -1993,26 +1993,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('mk_failed_searches', JSON.stringify(failedSearches));
   }, [failedSearches]);
 
-  // Location State
+  // Location State (Default: Caracas, Venezuela 10.4806, -66.9036)
   const [userLocation, setUserLocation] = useState<Coordinates | null>(DEFAULT_CENTER_COORDS);
-  const [userAddressLabel, setUserAddressLabel] = useState<string>('Ubicación actual detectada');
+  const [userAddressLabel, setUserAddressLabel] = useState<string>('Caracas, Distrito Capital (Venezuela)');
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locationPermissionStatus, setLocationPermissionStatus] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('prompt');
 
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(() => {
+    const isNotMexico = (addr: SavedAddress) =>
+      !(addr?.coordinates && addr.coordinates.lat > 14 && addr.coordinates.lat < 25 && addr.coordinates.lng < -90);
     const isCleared = localStorage.getItem('mk_mock_data_cleared') !== 'false';
     if (isCleared) {
       const saved = localStorage.getItem('mk_saved_addresses');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : [];
+          return Array.isArray(parsed) ? parsed.filter(isNotMexico) : [];
         } catch (e) {}
       }
       return [];
     }
     const saved = localStorage.getItem('mk_saved_addresses');
-    return saved ? JSON.parse(saved) : INITIAL_SAVED_ADDRESSES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(isNotMexico);
+          return cleaned.length > 0 ? cleaned : INITIAL_SAVED_ADDRESSES;
+        }
+      } catch (e) {}
+    }
+    return INITIAL_SAVED_ADDRESSES;
   });
 
   // Supabase PostgreSQL Integration State
@@ -2283,9 +2294,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsLocating(false);
       },
       (_err) => {
-        // Fallback to metropolitan default coordinates smoothly
+        // Fallback to Caracas, Venezuela default coordinates smoothly
         setUserLocation(DEFAULT_CENTER_COORDS);
-        setUserAddressLabel('Centro Urbano (Aproximado)');
+        setUserAddressLabel('Caracas, Distrito Capital (Venezuela)');
         setLocationPermissionStatus('denied');
         setIsLocating(false);
       },

@@ -101,10 +101,10 @@ export const SuperAdminDashboard: React.FC = () => {
   const [newBizName, setNewBizName] = useState('');
   const [newBizCategory, setNewBizCategory] = useState<BusinessCategory>('farmacia');
   const [newBizLogo, setNewBizLogo] = useState('💊');
-  const [newBizPhone, setNewBizPhone] = useState('+52 55 0000 0000');
+  const [newBizPhone, setNewBizPhone] = useState('+58 412 000 0000');
   const [newBizAddress, setNewBizAddress] = useState('');
-  const [newBizLat, setNewBizLat] = useState(19.4120);
-  const [newBizLng, setNewBizLng] = useState(-99.1650);
+  const [newBizLat, setNewBizLat] = useState(10.4806);
+  const [newBizLng, setNewBizLng] = useState(-66.9036);
   const [newBizPinColor, setNewBizPinColor] = useState('#2563eb');
   const [newBizCommission, setNewBizCommission] = useState(10);
   const [newBizHours, setNewBizHours] = useState('08:00 AM - 10:00 PM');
@@ -228,10 +228,10 @@ export const SuperAdminDashboard: React.FC = () => {
     setNewBizName('');
     setNewBizCategory('farmacia');
     setNewBizLogo('💊');
-    setNewBizPhone('+52 55 1234 5678');
+    setNewBizPhone('+58 412 123 4567');
     setNewBizAddress('');
-    setNewBizLat(19.4120);
-    setNewBizLng(-99.1650);
+    setNewBizLat(10.4806);
+    setNewBizLng(-66.9036);
     setNewBizPinColor('#2563eb');
     setNewBizCommission(10);
     setNewBizHours('08:00 AM - 10:00 PM');

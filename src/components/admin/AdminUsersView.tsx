@@ -470,7 +470,7 @@ export const AdminUsersView: React.FC = () => {
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+52 55..."
+                    placeholder="+58 412..."
                     className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:border-[#D4021D] focus:outline-none"
                   />
                 </div>
@@ -589,7 +589,7 @@ export const AdminUsersView: React.FC = () => {
                     type="text"
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
-                    placeholder="+52 55..."
+                    placeholder="+58 412..."
                     className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:border-[#D4021D] focus:outline-none"
                   />
                 </div>

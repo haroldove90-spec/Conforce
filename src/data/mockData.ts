@@ -67,7 +67,7 @@ export const INITIAL_USERS: UserAccount[] = [
     role: 'admin',
     status: 'active',
     department: 'Dirección General',
-    phone: '+52 55 9988 7766',
+    phone: '+58 412 9988776',
     createdAt: '2026-01-01',
     lastLogin: '2026-09-21 17:00'
   },
@@ -80,7 +80,7 @@ export const INITIAL_USERS: UserAccount[] = [
     role: 'admin',
     status: 'active',
     department: 'Dirección General & Superadministración',
-    phone: '+52 55 1122 3344',
+    phone: '+58 412 1122334',
     createdAt: '2026-01-15',
     lastLogin: '2026-09-03 21:30'
   },
@@ -93,7 +93,7 @@ export const INITIAL_USERS: UserAccount[] = [
     role: 'admin',
     status: 'active',
     department: 'Operaciones & Sistemas',
-    phone: '+52 55 2233 4455',
+    phone: '+58 412 2233445',
     createdAt: '2026-02-01',
     lastLogin: '2026-09-07 11:30'
   },
@@ -106,7 +106,7 @@ export const INITIAL_USERS: UserAccount[] = [
     role: 'seller',
     status: 'active',
     businessId: 'biz-farmacia-1',
-    phone: '+52 55 8765 4321',
+    phone: '+58 412 8765432',
     createdAt: '2026-03-10',
     lastLogin: '2026-09-03 18:40'
   },
@@ -1077,7 +1077,7 @@ export const INITIAL_ORDERS: Order[] = [
     businessName: 'Burger Craft & Wings House',
     businessLogo: '🍔',
     customerName: 'Carlos Mendoza',
-    customerPhone: '+52 55 8912 3456',
+    customerPhone: '+58 412 8912345',
     items: [
       {
         product: INITIAL_PRODUCTS[8], // Burger combo
@@ -1094,8 +1094,8 @@ export const INITIAL_ORDERS: Order[] = [
     deliveryFee: 35,
     total: 578,
     deliveryType: 'delivery',
-    deliveryAddress: 'Calle Insurgentes Sur 950, Depto 402',
-    deliveryCoordinates: { lat: 19.3820, lng: -99.1760 },
+    deliveryAddress: 'Av. Francisco de Miranda, Edif. Chacao, Apto 402, Caracas',
+    deliveryCoordinates: { lat: 10.4912, lng: -66.8521 },
     paymentMethod: 'card',
     status: 'on_the_way',
     createdAt: 'Hace 15 min',
@@ -1107,7 +1107,7 @@ export const INITIAL_ORDERS: Order[] = [
     businessName: 'Farmacias San Rafael Express',
     businessLogo: '💊',
     customerName: 'Mariana Gómez',
-    customerPhone: '+52 55 7766 5544',
+    customerPhone: '+58 414 7766554',
     items: [
       {
         product: INITIAL_PRODUCTS[0], // Paracetamol
@@ -1124,8 +1124,8 @@ export const INITIAL_ORDERS: Order[] = [
     deliveryFee: 25,
     total: 225,
     deliveryType: 'delivery',
-    deliveryAddress: 'Av. Coyoacán 1230, Col. Del Valle',
-    deliveryCoordinates: { lat: 19.3900, lng: -99.1670 },
+    deliveryAddress: 'Av. Principal de Las Mercedes, Caracas',
+    deliveryCoordinates: { lat: 10.4812, lng: -66.8624 },
     paymentMethod: 'cash_on_delivery',
     status: 'delivered',
     createdAt: 'Hace 45 min'
@@ -1136,7 +1136,7 @@ export const INITIAL_ORDERS: Order[] = [
     businessName: 'Pizzería Napolitana Bella Forno',
     businessLogo: '🍕',
     customerName: 'Roberto Garza',
-    customerPhone: '+52 55 2211 4455',
+    customerPhone: '+58 412 2211445',
     items: [
       {
         product: INITIAL_PRODUCTS[10], // Pizza
@@ -1148,8 +1148,8 @@ export const INITIAL_ORDERS: Order[] = [
     deliveryFee: 0,
     total: 230,
     deliveryType: 'pickup',
-    deliveryAddress: 'Recojo en local - Mostrador',
-    deliveryCoordinates: { lat: 19.4165, lng: -99.1600 },
+    deliveryAddress: 'Retiro en local - Mostrador Altamira',
+    deliveryCoordinates: { lat: 10.4990, lng: -66.8490 },
     paymentMethod: 'card',
     status: 'ready',
     createdAt: 'Hace 20 min'
@@ -1160,7 +1160,7 @@ export const INITIAL_ORDERS: Order[] = [
     businessName: 'Sushi Roll Master & Poke Bar',
     businessLogo: '🍣',
     customerName: 'Alejandra Ruiz',
-    customerPhone: '+52 55 9900 1122',
+    customerPhone: '+58 424 9900112',
     items: [
       {
         product: INITIAL_PRODUCTS[14], // Dragon roll
@@ -1172,8 +1172,8 @@ export const INITIAL_ORDERS: Order[] = [
     deliveryFee: 30,
     total: 420,
     deliveryType: 'delivery',
-    deliveryAddress: 'Calle Mazatlán 78, Col. Condesa',
-    deliveryCoordinates: { lat: 19.4130, lng: -99.1720 },
+    deliveryAddress: 'Calle Madrid, Las Mercedes, Caracas',
+    deliveryCoordinates: { lat: 10.4806, lng: -66.9036 },
     paymentMethod: 'card',
     status: 'preparing',
     createdAt: 'Hace 10 min'
@@ -1282,7 +1282,7 @@ export const INITIAL_FAILED_SEARCHES: FailedSearchRecord[] = [
     firstSearchedAt: '2026-08-15 09:20',
     lastSearchedAt: '2026-09-06 18:45',
     status: 'pending',
-    userLocationHint: 'Col. Roma Norte / Condesa',
+    userLocationHint: 'Chacao / Altamira, Caracas',
     notes: 'Alta demanda en medicamentos especializados para diabetes. Contactar con Farmacia San Rafael para surtir.'
   },
   {
@@ -1293,7 +1293,7 @@ export const INITIAL_FAILED_SEARCHES: FailedSearchRecord[] = [
     firstSearchedAt: '2026-08-18 20:10',
     lastSearchedAt: '2026-09-07 01:15',
     status: 'evaluating',
-    userLocationHint: 'Zona Centro / Juárez',
+    userLocationHint: 'Las Mercedes, Baruta, Caracas',
     notes: 'Se evaluó con Burger Craft para incorporar combo nocturno de alitas con blue cheese.'
   },
   {
@@ -1304,7 +1304,7 @@ export const INITIAL_FAILED_SEARCHES: FailedSearchRecord[] = [
     firstSearchedAt: '2026-08-21 14:05',
     lastSearchedAt: '2026-09-05 11:30',
     status: 'pending',
-    userLocationHint: 'Col. Cuauhtémoc',
+    userLocationHint: 'Sabana Grande, Caracas',
     notes: 'Buscar distribuidor de pañales o conveniencia 24h.'
   },
   {
@@ -1315,7 +1315,7 @@ export const INITIAL_FAILED_SEARCHES: FailedSearchRecord[] = [
     firstSearchedAt: '2026-08-25 16:40',
     lastSearchedAt: '2026-09-06 22:10',
     status: 'evaluating',
-    userLocationHint: 'Paseo de la Reforma',
+    userLocationHint: 'Av. Francisco de Miranda, Caracas',
     notes: 'Comercios cercanos de accesorios de celular interesados en afiliarse.'
   },
   {
@@ -1326,7 +1326,7 @@ export const INITIAL_FAILED_SEARCHES: FailedSearchRecord[] = [
     firstSearchedAt: '2026-08-26 13:00',
     lastSearchedAt: '2026-09-04 15:20',
     status: 'added',
-    userLocationHint: 'Col. Roma Sur',
+    userLocationHint: 'El Rosal, Chacao, Caracas',
     notes: 'Resuelto: Afiliación de restaurante de sushi en proceso de carga de menú.'
   },
   {
@@ -1337,8 +1337,8 @@ export const INITIAL_FAILED_SEARCHES: FailedSearchRecord[] = [
     firstSearchedAt: '2026-08-29 10:15',
     lastSearchedAt: '2026-09-06 08:30',
     status: 'added',
-    userLocationHint: 'Col. Del Valle',
-    notes: 'Resuelto: Stock actualizado en Farmacia San Rafael y Farmacia Roma.'
+    userLocationHint: 'Los Palos Grandes, Caracas',
+    notes: 'Resuelto: Stock actualizado en Farmacia San Rafael.'
   }
 ];
 

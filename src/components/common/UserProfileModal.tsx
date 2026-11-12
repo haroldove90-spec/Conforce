@@ -325,7 +325,7 @@ export const UserProfileModal: React.FC = () => {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       className="w-full pl-8 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D4021D] focus:ring-1 focus:ring-[#D4021D]"
-                      placeholder="+52 55 1234 5678"
+                      placeholder="+58 412 1234567"
                     />
                     <Phone className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
                   </div>

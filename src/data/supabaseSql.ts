@@ -413,7 +413,7 @@ CREATE TABLE IF NOT EXISTS public.saved_addresses (
     id TEXT PRIMARY KEY,
     label TEXT NOT NULL,
     address TEXT NOT NULL,
-    coordinates JSONB NOT NULL DEFAULT '{"lat": 19.4120, "lng": -99.1650}'::jsonb,
+    coordinates JSONB NOT NULL DEFAULT '{"lat": 10.4806, "lng": -66.9036}'::jsonb,
     is_default BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -484,7 +484,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
     email TEXT NOT NULL,
     phone TEXT NOT NULL,
     address TEXT NOT NULL,
-    city TEXT NOT NULL DEFAULT 'Ciudad de México',
+    city TEXT NOT NULL DEFAULT 'Caracas',
     total_orders INTEGER NOT NULL DEFAULT 0,
     total_spent NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -609,7 +609,7 @@ INSERT INTO public.businesses (
 (
     'biz-farmacia-1', 'Farmacias San Rafael Express', 'farmacia', '💊',
     'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=800&auto=format&fit=crop&q=60',
-    '+52 55 8765 4321', 'Av. Central 452, Col. Del Valle', '{"lat": 19.3985, "lng": -99.1685}'::jsonb,
+    '+58 412 8765432', 'Av. Francisco de Miranda, Chacao, Caracas', '{"lat": 10.4912, "lng": -66.8521}'::jsonb,
     '24 Horas (Lunes a Domingo)', 4.8, 142, true, true,
     8.0, '#10b981', '15-25 min', 100.0,
     ARRAY['farmacia', 'medicamentos', 'urgencias', 'salud', 'paracetamol', 'antigripal', 'dolor']
@@ -617,7 +617,7 @@ INSERT INTO public.businesses (
 (
     'biz-farm-1', 'Farmacias San Rafael Express', 'farmacia', '💊',
     'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=800&auto=format&fit=crop&q=60',
-    '+52 55 8765 4321', 'Av. Central 452, Col. Del Valle', '{"lat": 19.3985, "lng": -99.1685}'::jsonb,
+    '+58 412 8765432', 'Av. Francisco de Miranda, Chacao, Caracas', '{"lat": 10.4912, "lng": -66.8521}'::jsonb,
     '24 Horas (Lunes a Domingo)', 4.8, 142, true, true,
     8.0, '#10b981', '15-25 min', 100.0,
     ARRAY['farmacia', 'medicamentos', 'urgencias', 'salud', 'paracetamol', 'antigripal', 'dolor']
@@ -625,7 +625,7 @@ INSERT INTO public.businesses (
 (
     'biz-farmacia-2', 'Farmacia & Dermocuidado Vitalis', 'farmacia', '🌿',
     'https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=800&auto=format&fit=crop&q=60',
-    '+52 55 1234 5678', 'Calle Durango 188, Col. Roma Norte', '{"lat": 19.4190, "lng": -99.1650}'::jsonb,
+    '+58 414 1234567', 'Av. Principal de Las Mercedes, Baruta, Caracas', '{"lat": 10.4812, "lng": -66.8624}'::jsonb,
     '08:00 AM - 10:00 PM', 4.9, 98, true, true,
     9.0, '#059669', '20-30 min', 150.0,
     ARRAY['dermocosmetica', 'vitaminas', 'suplementos', 'pediatria', 'analgesico', 'bloqueador', 'skincare']
@@ -633,7 +633,7 @@ INSERT INTO public.businesses (
 (
     'biz-farmacia-3', 'Farmacia Familiar & Pediátrica San Lucas', 'farmacia', '🍼',
     'https://images.unsplash.com/photo-1576602976047-174e57a47881?w=800&auto=format&fit=crop&q=60',
-    '+52 55 4433 2211', 'Av. Coyoacán 810, Col. Del Valle Sur', '{"lat": 19.3750, "lng": -99.1710}'::jsonb,
+    '+58 424 4433221', 'Av. San Juan Bosco, Altamira, Chacao, Caracas', '{"lat": 10.4990, "lng": -66.8490}'::jsonb,
     '07:00 AM - 11:00 PM', 4.9, 165, true, true,
     8.0, '#0ea5e9', '20-35 min', 120.0,
     ARRAY['pediatria', 'bebes', 'panales', 'leche', 'termometro', 'infantil', 'salud']
@@ -641,7 +641,7 @@ INSERT INTO public.businesses (
 (
     'biz-farmacia-4', 'Farmacia Botica Natural VerdeVida', 'farmacia', '🍃',
     'https://images.unsplash.com/photo-1512069772995-ec65ed45afd6?w=800&auto=format&fit=crop&q=60',
-    '+52 55 9988 7766', 'Av. Tamaulipas 64, Col. Condesa', '{"lat": 19.4110, "lng": -99.1730}'::jsonb,
+    '+58 412 9988776', 'Av. Casanova, Sabana Grande, Caracas', '{"lat": 10.4930, "lng": -66.8780}'::jsonb,
     '09:00 AM - 09:00 PM', 4.7, 84, true, true,
     8.0, '#16a34a', '25-40 min', 130.0,
     ARRAY['natural', 'homeopatia', 'propoleo', 'colageno', 'herbolaria', 'te', 'suplementos']
@@ -649,7 +649,7 @@ INSERT INTO public.businesses (
 (
     'biz-resto-1', 'Burger Craft & Wings House', 'restaurante', '🍔',
     'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop&q=60',
-    '+52 55 9876 5432', 'Av. Insurgentes Sur 1205, Mixcoac', '{"lat": 19.3780, "lng": -99.1790}'::jsonb,
+    '+58 414 9876543', 'Calle Madrid con New York, Las Mercedes, Caracas', '{"lat": 10.4790, "lng": -66.8650}'::jsonb,
     '12:00 PM - 11:30 PM', 4.7, 310, true, true,
     12.0, '#f97316', '25-40 min', 120.0,
     ARRAY['hamburguesas', 'alitas', 'papas', 'comida rapida', 'cena', 'bbq', 'tocino']
@@ -657,7 +657,7 @@ INSERT INTO public.businesses (
 (
     'biz-resto-2', 'Pizzería Napolitana Bella Forno', 'restaurante', '🍕',
     'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=60',
-    '+52 55 4567 8901', 'Av. Álvaro Obregón 85, Col. Condesa', '{"lat": 19.4165, "lng": -99.1600}'::jsonb,
+    '+58 412 4567890', 'Av. Venezuela, El Rosal, Chacao, Caracas', '{"lat": 10.4870, "lng": -66.8680}'::jsonb,
     '01:00 PM - 11:00 PM', 4.9, 224, true, true,
     10.0, '#ef4444', '30-45 min', 180.0,
     ARRAY['pizza', 'artesanal', 'italiana', 'pasta', 'lasagna', 'cena', 'pepperoni']
@@ -665,7 +665,7 @@ INSERT INTO public.businesses (
 (
     'biz-resto-3', 'Tacos Los Compadres & Birria', 'restaurante', '🌮',
     'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=800&auto=format&fit=crop&q=60',
-    '+52 55 3322 1100', 'Eje Central Lázaro Cárdenas 210, Centro', '{"lat": 19.4340, "lng": -99.1410}'::jsonb,
+    '+58 424 3322110', 'Av. Urdaneta, Centro de Caracas', '{"lat": 10.5060, "lng": -66.9120}'::jsonb,
     '10:00 AM - 02:00 AM', 4.8, 450, true, true,
     10.0, '#eab308', '15-30 min', 80.0,
     ARRAY['tacos', 'pastor', 'birria', 'consome', 'antojitos', 'cena', 'quesadillas']
@@ -673,7 +673,7 @@ INSERT INTO public.businesses (
 (
     'biz-resto-4', 'Sushi Roll Master & Poke Bar', 'restaurante', '🍣',
     'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=800&auto=format&fit=crop&q=60',
-    '+52 55 6677 8899', 'Calle Michoacán 42, Col. Condesa', '{"lat": 19.4125, "lng": -99.1705}'::jsonb,
+    '+58 412 6677889', 'Av. Luis Roche, Los Palos Grandes, Caracas', '{"lat": 10.4975, "lng": -66.8520}'::jsonb,
     '12:30 PM - 10:30 PM', 4.8, 189, true, true,
     11.0, '#ec4899', '25-35 min', 150.0,
     ARRAY['sushi', 'poke', 'salmon', 'japonesa', 'rollos', 'mariscos', 'tempura']
@@ -802,12 +802,12 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO public.saved_addresses (id, label, address, coordinates, is_default)
 VALUES
 (
-    'addr-1', 'Casa', 'Av. Michoacán 84, Col. Condesa',
-    '{"lat": 19.4120, "lng": -99.1650}'::jsonb, true
+    'addr-1', 'Casa', 'Av. Francisco de Miranda, Residencias Chacao, Caracas',
+    '{"lat": 10.4806, "lng": -66.9036}'::jsonb, true
 ),
 (
-    'addr-2', 'Oficina', 'Paseo de la Reforma 222, Col. Juárez',
-    '{"lat": 19.4290, "lng": -99.1620}'::jsonb, false
+    'addr-2', 'Oficina', 'Torre Digitel, La Castellana, Chacao, Caracas',
+    '{"lat": 10.4980, "lng": -66.8530}'::jsonb, false
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -818,31 +818,31 @@ INSERT INTO public.users (id, name, username, email, password, password_hash, ro
 VALUES
 (
     'usr-superadmin-1', 'Harold Anguiano Morales', 'haroldo90',
-    'haroldo90@hotmail.com', 'Chevropar#1970', 'Chevropar#1970', 'admin', NULL, '+52 55 1234 5678', true
+    'haroldo90@hotmail.com', 'Chevropar#1970', 'Chevropar#1970', 'admin', NULL, '+58 412 1234567', true
 ),
 (
     'usr-admin-2', 'Anyl', 'anyl_admin',
-    'anyl@conforce.com', 'Anyl#ConForce2026*!', 'Anyl#ConForce2026*!', 'admin', NULL, '+52 55 8765 4321', true
+    'anyl@conforce.com', 'Anyl#ConForce2026*!', 'Anyl#ConForce2026*!', 'admin', NULL, '+58 412 8765432', true
 ),
 (
     'usr-seller-1', 'Farmacia San Rafael', 'farmacia_sanrafael',
-    'contacto@sanrafael.com', 'SanRafael#2026', 'SanRafael#2026', 'seller', 'biz-farmacia-1', '+52 55 5555 1111', true
+    'contacto@sanrafael.com', 'SanRafael#2026', 'SanRafael#2026', 'seller', 'biz-farmacia-1', '+58 412 5551111', true
 ),
 (
     'usr-seller-2', 'La Parrilla Urbana', 'parrilla_urbana',
-    'ventas@parrillaurbana.com', 'Parrilla#2026', 'Parrilla#2026', 'seller', 'biz-resto-1', '+52 55 5555 2222', true
+    'ventas@parrillaurbana.com', 'Parrilla#2026', 'Parrilla#2026', 'seller', 'biz-resto-1', '+58 414 5552222', true
 ),
 (
     'usr-client-1', 'Harold Anguiano Morales', 'haroldo90_cli',
-    'haroldo90@cliente.com', 'Chevropar#1970', 'Chevropar#1970', 'client', NULL, '+52 55 1234 5678', true
+    'haroldo90@cliente.com', 'Chevropar#1970', 'Chevropar#1970', 'client', NULL, '+58 412 1234567', true
 ),
 (
     'usr-client-2', 'María Elena López', 'marialopez',
-    'maria.lopez@gmail.com', 'Cliente#2026', 'Cliente#2026', 'client', NULL, '+52 55 9876 5432', true
+    'maria.lopez@gmail.com', 'Cliente#2026', 'Cliente#2026', 'client', NULL, '+58 414 9876543', true
 ),
 (
     'usr-client-3', 'Carlos Mendoza', 'carlosm',
-    'carlos.mendoza@yahoo.com', 'Carlos#2026', 'Carlos#2026', 'client', NULL, '+52 55 8912 3456', true
+    'carlos.mendoza@yahoo.com', 'Carlos#2026', 'Carlos#2026', 'client', NULL, '+58 424 8912345', true
 )
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
@@ -862,19 +862,19 @@ INSERT INTO public.clients (id, user_id, name, username, email, phone, address, 
 VALUES
 (
     'cli-1', 'usr-client-1', 'Harold Anguiano Morales', 'haroldo90_cli',
-    'haroldo90@cliente.com', '+52 55 1234 5678', 'Av. Insurgentes Sur 1450, Roma Norte', 'Ciudad de México', 8, 3840.0
+    'haroldo90@cliente.com', '+58 412 1234567', 'Av. Francisco de Miranda, Chacao, Caracas', 'Caracas', 8, 3840.0
 ),
 (
     'cli-2', 'usr-client-2', 'María Elena López', 'marialopez',
-    'maria.lopez@gmail.com', '+52 55 9876 5432', 'Calle Colima 230, Depto 401, Roma Norte', 'Ciudad de México', 14, 5280.0
+    'maria.lopez@gmail.com', '+58 414 9876543', 'Calle Madrid, Las Mercedes, Caracas', 'Caracas', 14, 5280.0
 ),
 (
     'cli-3', 'usr-client-3', 'Carlos Mendoza', 'carlosm',
-    'carlos.mendoza@yahoo.com', '+52 55 8912 3456', 'Paseo de la Reforma 222, Col. Juárez', 'Ciudad de México', 9, 3120.0
+    'carlos.mendoza@yahoo.com', '+58 424 8912345', 'Av. San Juan Bosco, Altamira, Caracas', 'Caracas', 9, 3120.0
 ),
 (
     'cli-4', NULL, 'Sofía Ramírez', 'sofiar',
-    'sofia.ramirez@hotmail.com', '+52 55 4567 8901', 'Av. Horacio 500, Polanco', 'Ciudad de México', 4, 1850.0
+    'sofia.ramirez@hotmail.com', '+58 412 4567890', 'Av. Principal de El Rosal, Caracas', 'Caracas', 4, 1850.0
 )
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
@@ -893,19 +893,19 @@ INSERT INTO public.employees (id, name, email, phone, position, department, busi
 VALUES
 (
     'emp-1', 'Laura Salazar', 'laura.salazar@conforce.com',
-    '+52 55 4321 8765', 'Coordinadora de Operaciones y Rutas', 'Operaciones & Logística', NULL, 22000.0, '2023-04-15', true
+    '+58 412 4321876', 'Coordinadora de Operaciones y Rutas', 'Operaciones & Logística', NULL, 22000.0, '2023-04-15', true
 ),
 (
     'emp-2', 'Carlos Rivera', 'carlos.rivera@conforce.com',
-    '+52 55 6543 2109', 'Especialista en Soporte WhatsApp & Bot IA', 'Soporte al Cliente & Bot', NULL, 16500.0, '2023-08-01', true
+    '+58 414 6543210', 'Especialista en Soporte WhatsApp & Bot IA', 'Soporte al Cliente & Bot', NULL, 16500.0, '2023-08-01', true
 ),
 (
     'emp-3', 'Sofía Valenzuela', 'sofia.valenzuela@conforce.com',
-    '+52 55 3456 7890', 'Analista de Finanzas y Liquidaciones', 'Finanzas & Facturación', NULL, 19500.0, '2024-01-10', true
+    '+58 424 3456789', 'Analista de Finanzas y Liquidaciones', 'Finanzas & Facturación', NULL, 19500.0, '2024-01-10', true
 ),
 (
     'emp-4', 'Jorge Morales', 'jorge.morales@sanrafael.com',
-    '+52 55 7890 1234', 'Encargado de Mostrador y Despacho', 'Comercial & Afiliaciones', 'biz-farmacia-1', 14000.0, '2023-11-20', true
+    '+58 412 7890123', 'Encargado de Mostrador y Despacho', 'Comercial & Afiliaciones', 'biz-farmacia-1', 14000.0, '2023-11-20', true
 )
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,

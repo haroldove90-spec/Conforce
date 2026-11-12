@@ -312,7 +312,7 @@ export function mapAddressFromDB(row: any): SavedAddress {
     id: row.id,
     label: row.label,
     address: row.address,
-    coordinates: row.coordinates || { lat: 19.412, lng: -99.165 },
+    coordinates: row.coordinates || { lat: 10.4806, lng: -66.9036 },
     isDefault: Boolean(row.is_default ?? false)
   };
 }
