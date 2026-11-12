@@ -21,7 +21,8 @@ import {
   MessageCircle,
   Smartphone,
   Send,
-  AlertCircle
+  AlertCircle,
+  LogIn
 } from 'lucide-react';
 
 interface CartCheckoutDrawerProps {
@@ -168,6 +169,13 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
 
   const handlePlaceOrder = (channelOverride?: OrderChannel) => {
     if (cart.length === 0 || !targetBusiness) return;
+
+    // Si el usuario no ha iniciado sesión o no está registrado, abrir modal de autenticación de cliente
+    if (!currentUser) {
+      setClientAuthIntent('order_checkout');
+      setIsClientAuthModalOpen(true);
+      return;
+    }
 
     const channelToUse = channelOverride || checkoutChannel;
     const finalDeliveryAddress = getResolvedAddress();
@@ -660,7 +668,56 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
               )}
             </div>
 
-            {/* 6. Datos del Cliente & Notas */}
+            {/* 6. Identificación de Cliente y Datos de Contacto */}
+            {!currentUser ? (
+              <div className="p-3 bg-red-50/90 border-2 border-red-400/80 rounded-2xl space-y-2 text-xs shadow-xs animate-fade-in">
+                <div className="flex items-center gap-2 text-red-950 font-bold">
+                  <AlertCircle className="w-4 h-4 text-[#D4021D] shrink-0" />
+                  <span>¿Tienes cuenta de cliente o eres nuevo?</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-snug">
+                  Para coordinar la entrega y enviar tu pedido al comercio, inicia sesión con tus credenciales o regístrate gratis en 30 segundos.
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClientAuthIntent('login');
+                      setIsClientAuthModalOpen(true);
+                    }}
+                    className="py-2 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                  >
+                    <LogIn className="w-3.5 h-3.5 text-[#D4021D]" />
+                    <span>Iniciar Sesión</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClientAuthIntent('register');
+                      setIsClientAuthModalOpen(true);
+                    }}
+                    className="py-2 px-2.5 rounded-xl bg-[#D4021D] hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Registrarme</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-950">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <span className="font-bold">Comprando como: {currentUser.name}</span>
+                    <p className="text-[10px] text-emerald-700">@{currentUser.username}</p>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
+                  Sesión Activa
+                </span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <label className="text-slate-600 text-[10px] uppercase font-bold">Tu Nombre</label>
@@ -755,7 +812,10 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                     ) : (
                       <>
                         <Smartphone className="w-4 h-4" />
-                        <span>Comprar vía App Móvil (Bs. ${grandTotal})</span>
+                        <span>
+                          {!currentUser ? 'Identificarme y Comprar vía App' : 'Comprar vía App Móvil'}{' '}
+                          (Bs. {grandTotal.toLocaleString('es-VE')})
+                        </span>
                       </>
                     )}
                   </button>
@@ -784,7 +844,10 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                     ) : (
                       <>
                         <MessageCircle className="w-4 h-4 fill-white" />
-                        <span>Enviar Pedido al WhatsApp del Negocio (Bs. {grandTotal.toLocaleString('es-VE')})</span>
+                        <span>
+                          {!currentUser ? 'Identificarme y Enviar Pedido a WhatsApp' : 'Enviar Pedido al WhatsApp del Negocio'}{' '}
+                          (Bs. {grandTotal.toLocaleString('es-VE')})
+                        </span>
                       </>
                     )}
                   </button>

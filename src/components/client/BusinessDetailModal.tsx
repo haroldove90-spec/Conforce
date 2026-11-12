@@ -48,7 +48,8 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
     exchangeRateUsd,
     formatCurrency,
     userAddressLabel,
-    currentUser
+    currentUser,
+    requestProductOrder
   } = useApp();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -307,17 +308,14 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              const msg = buildProductWhatsAppOrderMessage({
+                              requestProductOrder({
                                 productName: prod.name,
                                 priceBs: prod.price,
                                 priceUsd: exchangeRateUsd > 0 ? Number((prod.price / exchangeRateUsd).toFixed(2)) : undefined,
                                 businessName: business.name,
                                 businessPhone: business.whatsapp || business.phone,
-                                quantity: qty > 0 ? qty : 1,
-                                customerName: currentUser?.name,
-                                customerAddress: userAddressLabel
+                                quantity: qty > 0 ? qty : 1
                               });
-                              openWhatsAppDirect(business.whatsapp || business.phone, msg);
                             }}
                             className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                             title="Solicitar este producto directamente por WhatsApp al negocio"
@@ -633,7 +631,7 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                       extrasList.push(`Notas: "${kitchenNotes.trim()}"`);
                     }
 
-                    const msg = buildProductWhatsAppOrderMessage({
+                    requestProductOrder({
                       productName: customizingProduct.name,
                       priceBs,
                       priceUsd,
@@ -641,11 +639,8 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                       businessPhone: business.whatsapp || business.phone,
                       quantity: 1,
                       variantLabel: variantText,
-                      extras: extrasList.length > 0 ? extrasList : undefined,
-                      customerName: currentUser?.name,
-                      customerAddress: userAddressLabel
+                      extras: extrasList.length > 0 ? extrasList : undefined
                     });
-                    openWhatsAppDirect(business.whatsapp || business.phone, msg);
                     setCustomizingProduct(null);
                   }}
                   className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer text-xs"

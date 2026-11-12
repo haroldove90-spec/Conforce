@@ -47,7 +47,9 @@ export const ProductSearchComparator: React.FC<ProductSearchComparatorProps> = (
     openExternalNavigation,
     openWhatsAppWithPrompt,
     recordFailedSearch,
-    openWebAssistantWithPrompt
+    openWebAssistantWithPrompt,
+    requestProductOrder,
+    exchangeRateUsd
   } = useApp();
 
   // Mode: 'delivery' vs 'pickup'
@@ -515,9 +517,16 @@ export const ProductSearchComparator: React.FC<ProductSearchComparatorProps> = (
 
                       {/* WhatsApp Direct Order / Inquiry */}
                       <button
-                        onClick={() => openWhatsAppWithPrompt(`¡Hola ${business.name}! 👋 ¿Tienen disponible "${product.name}" (Bs. ${product.price}) para entrega inmediata? Deseo pedirlo por ConForce.`, business.id)}
+                        onClick={() => requestProductOrder({
+                          productName: product.name,
+                          priceBs: product.price,
+                          priceUsd: exchangeRateUsd > 0 ? Number((product.price / exchangeRateUsd).toFixed(2)) : undefined,
+                          businessName: business.name,
+                          businessPhone: business.whatsapp || business.phone,
+                          quantity: 1
+                        })}
                         className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-semibold shadow-2xs cursor-pointer transition-colors"
-                        title="Solicitar o consultar por WhatsApp directamente a este negocio"
+                        title="Solicitar o pedir por WhatsApp directamente a este negocio"
                       >
                         <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                       </button>

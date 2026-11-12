@@ -67,7 +67,18 @@ import {
   fetchDriversFromSupabase,
   upsertDriverInSupabase
 } from '../services/supabaseClient';
-import { openWhatsAppDirect } from '../utils/urlUtils';
+import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../utils/urlUtils';
+
+export interface PendingProductOrder {
+  productName: string;
+  priceBs: number;
+  priceUsd?: number;
+  businessName: string;
+  businessPhone: string;
+  quantity: number;
+  variantLabel?: string;
+  extras?: string[];
+}
 
 interface AppContextType {
   // Navigation & Roles
@@ -261,6 +272,9 @@ interface AppContextType {
   setIsProfileModalOpen: (open: boolean) => void;
   clientAuthIntent: 'login' | 'register' | 'order_checkout';
   setClientAuthIntent: (intent: 'login' | 'register' | 'order_checkout') => void;
+  pendingProductOrder: PendingProductOrder | null;
+  setPendingProductOrder: (order: PendingProductOrder | null) => void;
+  requestProductOrder: (orderData: PendingProductOrder) => void;
   isMarketplaceRoute: boolean;
   currentRoute: 'marketplace' | 'corporate';
   navigateToRoute: (route: 'marketplace' | 'corporate') => void;
@@ -661,6 +675,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [clientAuthIntent, setClientAuthIntent] = useState<'login' | 'register' | 'order_checkout'>('login');
+  const [pendingProductOrder, setPendingProductOrder] = useState<PendingProductOrder | null>(null);
+
+  const requestProductOrder = (orderData: PendingProductOrder) => {
+    if (!currentUser) {
+      setPendingProductOrder(orderData);
+      setClientAuthIntent('order_checkout');
+      setIsClientAuthModalOpen(true);
+      return;
+    }
+
+    const msg = buildProductWhatsAppOrderMessage({
+      productName: orderData.productName,
+      priceBs: orderData.priceBs,
+      priceUsd: orderData.priceUsd,
+      businessName: orderData.businessName,
+      businessPhone: orderData.businessPhone,
+      quantity: orderData.quantity,
+      variantLabel: orderData.variantLabel,
+      extras: orderData.extras,
+      customerName: currentUser.name,
+      customerAddress: currentUser.address || userAddressLabel
+    });
+    openWhatsAppDirect(orderData.businessPhone, msg);
+  };
 
   const openCorporateAuth = (tab: 'admin' | 'seller' | 'driver' = 'admin') => {
     setCorporateAuthInitialTab(tab);
@@ -3216,6 +3254,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsProfileModalOpen,
         clientAuthIntent,
         setClientAuthIntent,
+        pendingProductOrder,
+        setPendingProductOrder,
+        requestProductOrder,
         isMarketplaceRoute,
         currentRoute,
         navigateToRoute,

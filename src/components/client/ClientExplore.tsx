@@ -59,7 +59,8 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
     openCorporateAuth,
     openDriverRegistration,
     isMockDataCleared,
-    exchangeRateUsd
+    exchangeRateUsd,
+    requestProductOrder
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'businesses' | 'products' | 'comparator'>('businesses');
@@ -648,17 +649,14 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const msg = buildProductWhatsAppOrderMessage({
+                            requestProductOrder({
                               productName: prod.name,
                               priceBs: prod.price,
                               priceUsd: exchangeRateUsd > 0 ? Number((prod.price / exchangeRateUsd).toFixed(2)) : undefined,
                               businessName: prod.business.name,
                               businessPhone: prod.business.whatsapp || prod.business.phone,
-                              quantity: 1,
-                              customerName: currentUser?.name,
-                              customerAddress: userAddressLabel
+                              quantity: 1
                             });
-                            openWhatsAppDirect(prod.business.whatsapp || prod.business.phone, msg);
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 transition-all shadow-2xs cursor-pointer active:scale-95"
                           title="Pedir este producto directamente por WhatsApp al negocio"

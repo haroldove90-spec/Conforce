@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PasswordInput } from './PasswordInput';
 import {
@@ -13,8 +13,10 @@ import {
   AlertCircle,
   LogIn,
   Store,
-  ShieldCheck
+  ShieldCheck,
+  ShoppingBag
 } from 'lucide-react';
+import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../../utils/urlUtils';
 
 export const ClientAuthModal: React.FC = () => {
   const {
@@ -25,12 +27,27 @@ export const ClientAuthModal: React.FC = () => {
     loginAsClient,
     registerClient,
     openBusinessRegistration,
-    users
+    users,
+    pendingProductOrder,
+    setPendingProductOrder,
+    userAddressLabel,
+    exchangeRateUsd
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>(
-    clientAuthIntent === 'register' ? 'register' : 'login'
-  );
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+
+  // Synchronize activeTab based on clientAuthIntent and prior login history
+  useEffect(() => {
+    if (!isClientAuthModalOpen) return;
+    if (clientAuthIntent === 'register') {
+      setActiveTab('register');
+    } else if (clientAuthIntent === 'login') {
+      setActiveTab('login');
+    } else if (clientAuthIntent === 'order_checkout') {
+      const savedUser = localStorage.getItem('mk_last_client_username');
+      setActiveTab(savedUser ? 'login' : 'register');
+    }
+  }, [clientAuthIntent, isClientAuthModalOpen]);
 
   // Login form state
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -74,10 +91,34 @@ export const ClientAuthModal: React.FC = () => {
       if (!res.success) {
         setErrorMessage(res.message);
       } else {
+        localStorage.setItem('mk_last_client_username', loginIdentifier.trim());
         setSuccessMessage(res.message);
+
+        // If there was a pending product WhatsApp order, open it with authenticated user info
+        if (pendingProductOrder) {
+          setTimeout(() => {
+            const finalCustName = res.user?.name || loginIdentifier.trim();
+            const finalCustAddr = res.user?.address || userAddressLabel;
+            const msg = buildProductWhatsAppOrderMessage({
+              productName: pendingProductOrder.productName,
+              priceBs: pendingProductOrder.priceBs,
+              priceUsd: pendingProductOrder.priceUsd,
+              businessName: pendingProductOrder.businessName,
+              businessPhone: pendingProductOrder.businessPhone,
+              quantity: pendingProductOrder.quantity,
+              variantLabel: pendingProductOrder.variantLabel,
+              extras: pendingProductOrder.extras,
+              customerName: finalCustName,
+              customerAddress: finalCustAddr
+            });
+            openWhatsAppDirect(pendingProductOrder.businessPhone, msg);
+            setPendingProductOrder(null);
+          }, 300);
+        }
+
         setTimeout(() => {
           setIsClientAuthModalOpen(false);
-        }, 600);
+        }, 700);
       }
     } catch (err: any) {
       setIsSubmitting(false);
@@ -124,7 +165,29 @@ export const ClientAuthModal: React.FC = () => {
       if (!res.success) {
         setErrorMessage(res.message);
       } else {
+        localStorage.setItem('mk_last_client_username', cleanUsername);
         setSuccessMessage(res.message);
+
+        // If there was a pending product WhatsApp order, open it with registered user info
+        if (pendingProductOrder) {
+          setTimeout(() => {
+            const msg = buildProductWhatsAppOrderMessage({
+              productName: pendingProductOrder.productName,
+              priceBs: pendingProductOrder.priceBs,
+              priceUsd: pendingProductOrder.priceUsd,
+              businessName: pendingProductOrder.businessName,
+              businessPhone: pendingProductOrder.businessPhone,
+              quantity: pendingProductOrder.quantity,
+              variantLabel: pendingProductOrder.variantLabel,
+              extras: pendingProductOrder.extras,
+              customerName: cleanName,
+              customerAddress: regAddress.trim() || userAddressLabel
+            });
+            openWhatsAppDirect(pendingProductOrder.businessPhone, msg);
+            setPendingProductOrder(null);
+          }, 300);
+        }
+
         setTimeout(() => {
           setIsClientAuthModalOpen(false);
         }, 1200);
@@ -227,6 +290,57 @@ export const ClientAuthModal: React.FC = () => {
 
         {/* Form Body */}
         <div className="p-6 overflow-y-auto space-y-4">
+          {/* Banner especial para usuarios que quieren solicitar un producto o hacer pedido */}
+          {clientAuthIntent === 'order_checkout' && (
+            <div className="p-3.5 bg-gradient-to-r from-red-950/90 via-zinc-900 to-black border-2 border-red-600/80 rounded-2xl space-y-2 shadow-lg animate-fade-in">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#D4021D] flex items-center justify-center text-white shrink-0 shadow-md">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wide">
+                    🛒 Completa tu Pedido o Solicitud de Producto
+                  </h4>
+                  <p className="text-[11px] text-zinc-300 leading-snug mt-0.5">
+                    Para coordinar el despacho y datos con el negocio, por favor ingresa o regístrate:
+                  </p>
+                </div>
+              </div>
+
+              {/* Botones de acción rápida para elegir entre Iniciar Sesión o Registrarse */}
+              <div className="grid grid-cols-2 gap-2 pt-1 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('login');
+                    setErrorMessage('');
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    activeTab === 'login'
+                      ? 'bg-[#D4021D] text-white border-red-500 shadow-md ring-1 ring-red-400'
+                      : 'bg-zinc-800/90 text-zinc-300 border-zinc-700 hover:text-white hover:bg-zinc-700'
+                  }`}
+                >
+                  🔑 Ya tengo cuenta (Entrar)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('register');
+                    setErrorMessage('');
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    activeTab === 'register'
+                      ? 'bg-[#D4021D] text-white border-red-500 shadow-md ring-1 ring-red-400'
+                      : 'bg-zinc-800/90 text-zinc-300 border-zinc-700 hover:text-white hover:bg-zinc-700'
+                  }`}
+                >
+                  ✨ Nuevo (Registrarme)
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Banner destacado para Administradores */}
           <div className="p-3 bg-gradient-to-r from-red-950/70 via-zinc-900 to-black border border-red-800/60 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -308,6 +422,22 @@ export const ClientAuthModal: React.FC = () => {
                   </>
                 )}
               </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('register');
+                    setErrorMessage('');
+                  }}
+                  className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  ¿No tienes cuenta de cliente todavía?{' '}
+                  <span className="text-[#D4021D] font-bold underline underline-offset-2">
+                    Crear cuenta gratis aquí
+                  </span>
+                </button>
+              </div>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-3.5">
@@ -430,6 +560,22 @@ export const ClientAuthModal: React.FC = () => {
                   </>
                 )}
               </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('login');
+                    setErrorMessage('');
+                  }}
+                  className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  ¿Ya estás registrado en ConForce?{' '}
+                  <span className="text-[#D4021D] font-bold underline underline-offset-2">
+                    Inicia sesión aquí con tus credenciales
+                  </span>
+                </button>
+              </div>
             </form>
           )}
 
