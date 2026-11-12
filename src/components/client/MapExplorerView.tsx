@@ -184,10 +184,10 @@ export const MapExplorerView: React.FC<MapExplorerViewProps> = ({
                 <span>Waze</span>
               </button>
               <button
-                onClick={() => openWhatsAppWithPrompt(`Hola, quiero consultar el catálogo de ${selectedMapBiz.name}`, selectedMapBiz.id)}
-                className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-800 px-2.5 py-1 rounded-xl text-xs font-bold border border-slate-300"
+                onClick={() => openWhatsAppWithPrompt(`¡Hola *${selectedMapBiz.name}*! 👋 Vi su tienda en el mapa de ConForce Marketplace y deseo hacer un pedido.`, selectedMapBiz.id)}
+                className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
-                <MessageCircle className="w-3 h-3 text-[#D4021D]" />
+                <MessageCircle className="w-3 h-3 text-emerald-600" />
                 <span>WhatsApp</span>
               </button>
             </div>

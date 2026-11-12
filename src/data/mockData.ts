@@ -118,8 +118,8 @@ export const INITIAL_USERS: UserAccount[] = [
     password: 'Cliente#2026',
     role: 'client',
     status: 'active',
-    phone: '+52 55 4321 9876',
-    address: 'Av. Insurgentes Sur 450, Roma Norte, CDMX',
+    phone: '+58 412 4321987',
+    address: 'Av. Francisco de Miranda, Edif. Parque Cristal, Chacao, Caracas',
     createdAt: '2026-04-12',
     lastLogin: '2026-09-03 19:10'
   },
@@ -131,8 +131,8 @@ export const INITIAL_USERS: UserAccount[] = [
     password: 'Carlos#2026',
     role: 'client',
     status: 'active',
-    phone: '+52 55 9876 5432',
-    address: 'Calle Durango 220, Col. Roma Norte, CDMX',
+    phone: '+58 414 9876543',
+    address: 'Av. Principal de Las Mercedes, Edif. La Cuadra, Baruta, Caracas',
     createdAt: '2026-05-20',
     lastLogin: '2026-09-02 14:22'
   },
@@ -144,8 +144,8 @@ export const INITIAL_USERS: UserAccount[] = [
     password: 'Sofia#2026',
     role: 'client',
     status: 'active',
-    phone: '+52 55 3344 5566',
-    address: 'Av. Coyoacán 810, Col. Del Valle, CDMX',
+    phone: '+58 424 3344556',
+    address: 'Av. Luis Roche con 3ra Transversal, Altamira, Caracas',
     createdAt: '2026-06-08',
     lastLogin: '2026-08-30 11:05'
   },
@@ -271,8 +271,8 @@ export const INITIAL_CLIENTS: ClientProfile[] = [
     name: 'María Elena López',
     username: 'marialopez',
     email: 'maria.lopez@gmail.com',
-    phone: '+52 55 4321 9876',
-    address: 'Av. Insurgentes Sur 450, Roma Norte, CDMX',
+    phone: '+58 412 4321987',
+    address: 'Av. Francisco de Miranda, Edif. Parque Cristal, Chacao, Caracas',
     totalOrders: 14,
     totalSpent: 3450,
     status: 'active',
@@ -284,8 +284,8 @@ export const INITIAL_CLIENTS: ClientProfile[] = [
     name: 'Carlos Mendoza',
     username: 'carlosm',
     email: 'carlos.mendoza@yahoo.com',
-    phone: '+52 55 9876 5432',
-    address: 'Calle Durango 220, Col. Roma Norte, CDMX',
+    phone: '+58 414 9876543',
+    address: 'Av. Principal de Las Mercedes, Edif. La Cuadra, Baruta, Caracas',
     totalOrders: 8,
     totalSpent: 1980,
     status: 'active',
@@ -297,8 +297,8 @@ export const INITIAL_CLIENTS: ClientProfile[] = [
     name: 'Sofía Ramírez',
     username: 'sofiaramirez',
     email: 'sofia.ramirez@outlook.com',
-    phone: '+52 55 3344 5566',
-    address: 'Av. Coyoacán 810, Col. Del Valle, CDMX',
+    phone: '+58 424 3344556',
+    address: 'Av. Luis Roche con 3ra Transversal, Altamira, Caracas',
     totalOrders: 5,
     totalSpent: 1240,
     status: 'active',
@@ -1184,20 +1184,20 @@ export const INITIAL_SAVED_ADDRESSES: SavedAddress[] = [
   {
     id: 'addr-1',
     label: 'Casa 🏠',
-    address: 'Av. Insurgentes Sur 950, Depto 402, Benito Juárez, CDMX',
-    coordinates: { lat: 19.3820, lng: -99.1760 }
+    address: 'Av. Francisco de Miranda, Residencias Chacao, Caracas',
+    coordinates: { lat: 10.4912, lng: -66.8521 }
   },
   {
     id: 'addr-2',
     label: 'Oficina 💼',
-    address: 'Paseo de la Reforma 222, Piso 14, Cuauhtémoc, CDMX',
-    coordinates: { lat: 19.4280, lng: -99.1610 }
+    address: 'Torre Digitel, Piso 8, La Castellana, Chacao, Caracas',
+    coordinates: { lat: 10.4980, lng: -66.8530 }
   },
   {
     id: 'addr-3',
-    label: 'Depa Roma 🏙️',
-    address: 'Calle Orizaba 45, Col. Roma Norte, CDMX',
-    coordinates: { lat: 19.4210, lng: -99.1600 }
+    label: 'Las Mercedes 🏙️',
+    address: 'Calle Madrid con New York, Las Mercedes, Baruta, Caracas',
+    coordinates: { lat: 10.4815, lng: -66.8620 }
   }
 ];
 

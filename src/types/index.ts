@@ -26,6 +26,7 @@ export interface Business {
   logo: string;
   bannerImage: string;
   phone: string;
+  whatsapp?: string;
   address: string;
   coordinates: Coordinates;
   openingHours: string;

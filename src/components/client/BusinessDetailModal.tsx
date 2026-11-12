@@ -25,6 +25,7 @@ import {
   Camera,
   DollarSign
 } from 'lucide-react';
+import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../../utils/urlUtils';
 
 interface BusinessDetailModalProps {
   business: Business;
@@ -45,7 +46,9 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
     openExternalNavigation,
     openWhatsAppWithPrompt,
     exchangeRateUsd,
-    formatCurrency
+    formatCurrency,
+    userAddressLabel,
+    currentUser
   } = useApp();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -211,8 +214,13 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                   <span>Waze</span>
                 </button>
                 <button
-                  onClick={() => openWhatsAppWithPrompt(`Hola, quiero consultar el catálogo de ${business.name}`, business.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-[#D4021D] hover:bg-[#b50218] text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                  onClick={() => {
+                    const bizPhone = business.whatsapp || business.phone;
+                    const msg = `¡Hola *${business.name}*! 👋 Vi su comercio en ConForce Marketplace y deseo consultar su catálogo o realizar un pedido.`;
+                    openWhatsAppDirect(bizPhone, msg);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
+                  title="Contactar al WhatsApp del Negocio"
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
                   <span>WhatsApp</span>
@@ -294,45 +302,70 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                           )}
                         </div>
 
-                        {/* If product has variants, ingredients or extras, open customizer modal */}
-                        {(prod.hasVariants || (prod.extras && prod.extras.length > 0) || (prod.ingredients && prod.ingredients.length > 0)) ? (
+                        <div className="flex items-center gap-1.5">
+                          {/* Botón directo para solicitar por WhatsApp al negocio */}
                           <button
-                            onClick={() => openCustomizeModal(prod)}
-                            className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
+                            type="button"
+                            onClick={() => {
+                              const msg = buildProductWhatsAppOrderMessage({
+                                productName: prod.name,
+                                priceBs: prod.price,
+                                priceUsd: exchangeRateUsd > 0 ? Number((prod.price / exchangeRateUsd).toFixed(2)) : undefined,
+                                businessName: business.name,
+                                businessPhone: business.whatsapp || business.phone,
+                                quantity: qty > 0 ? qty : 1,
+                                customerName: currentUser?.name,
+                                customerAddress: userAddressLabel
+                              });
+                              openWhatsAppDirect(business.whatsapp || business.phone, msg);
+                            }}
+                            className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                            title="Solicitar este producto directamente por WhatsApp al negocio"
                           >
-                            <Utensils className="w-3 h-3" />
-                            <span>Personalizar</span>
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600 group-hover:text-white" />
+                            <span>WhatsApp</span>
                           </button>
-                        ) : (
-                          /* Cart Controls for simple products */
-                          qty > 0 ? (
-                            <div className="flex items-center gap-2 bg-[#D4021D] text-white px-2 py-1 rounded-xl shadow-xs">
-                              <button
-                                onClick={() => addToCart(prod, -1)}
-                                className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="text-xs font-bold min-w-[14px] text-center">
-                                {qty}
-                              </span>
+
+                          {/* If product has variants, ingredients or extras, open customizer modal */}
+                          {(prod.hasVariants || (prod.extras && prod.extras.length > 0) || (prod.ingredients && prod.ingredients.length > 0)) ? (
+                            <button
+                              onClick={() => openCustomizeModal(prod)}
+                              className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
+                            >
+                              <Utensils className="w-3 h-3" />
+                              <span>Personalizar</span>
+                            </button>
+                          ) : (
+                            /* Cart Controls for simple products */
+                            qty > 0 ? (
+                              <div className="flex items-center gap-2 bg-[#D4021D] text-white px-2 py-1 rounded-xl shadow-xs">
+                                <button
+                                  onClick={() => addToCart(prod, -1)}
+                                  className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="text-xs font-bold min-w-[14px] text-center">
+                                  {qty}
+                                </span>
+                                <button
+                                  onClick={() => addToCart(prod, 1)}
+                                  className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 onClick={() => addToCart(prod, 1)}
-                                className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
+                                className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-3 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
                               >
                                 <Plus className="w-3.5 h-3.5" />
+                                <span>Agregar</span>
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => addToCart(prod, 1)}
-                              className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-3 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Agregar</span>
-                            </button>
-                          )
-                        )}
+                            )
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -588,25 +621,60 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  addToCart(customizingProduct, 1, {
-                    selectedVariantOption: selectedVariantOpt ? {
-                      variantName: customizingProduct.variants?.[0]?.name || 'Variante',
-                      optionLabel: selectedVariantOpt.label,
-                      priceDelta: selectedVariantOpt.priceDelta
-                    } : undefined,
-                    selectedExtras: selectedExtras.length > 0 ? selectedExtras : undefined,
-                    kitchenNotes: kitchenNotes.trim() || undefined
-                  });
-                  setCustomizingProduct(null);
-                }}
-                className="flex items-center gap-1.5 bg-[#D4021D] hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer text-xs"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Agregar al Pedido</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const priceBs = calculateCustomizedPrice(customizingProduct);
+                    const priceUsd = exchangeRateUsd > 0 ? Number((priceBs / exchangeRateUsd).toFixed(2)) : undefined;
+                    const variantText = selectedVariantOpt ? `${customizingProduct.variants?.[0]?.name || 'Variante'}: ${selectedVariantOpt.label}` : undefined;
+                    const extrasList = selectedExtras.map(e => `${e.name} (+Bs. ${e.price})`);
+                    if (kitchenNotes.trim()) {
+                      extrasList.push(`Notas: "${kitchenNotes.trim()}"`);
+                    }
+
+                    const msg = buildProductWhatsAppOrderMessage({
+                      productName: customizingProduct.name,
+                      priceBs,
+                      priceUsd,
+                      businessName: business.name,
+                      businessPhone: business.whatsapp || business.phone,
+                      quantity: 1,
+                      variantLabel: variantText,
+                      extras: extrasList.length > 0 ? extrasList : undefined,
+                      customerName: currentUser?.name,
+                      customerAddress: userAddressLabel
+                    });
+                    openWhatsAppDirect(business.whatsapp || business.phone, msg);
+                    setCustomizingProduct(null);
+                  }}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer text-xs"
+                  title="Enviar pedido personalizado directamente al WhatsApp del negocio"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Pedir por WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    addToCart(customizingProduct, 1, {
+                      selectedVariantOption: selectedVariantOpt ? {
+                        variantName: customizingProduct.variants?.[0]?.name || 'Variante',
+                        optionLabel: selectedVariantOpt.label,
+                        priceDelta: selectedVariantOpt.priceDelta
+                      } : undefined,
+                      selectedExtras: selectedExtras.length > 0 ? selectedExtras : undefined,
+                      kitchenNotes: kitchenNotes.trim() || undefined
+                    });
+                    setCustomizingProduct(null);
+                  }}
+                  className="flex items-center gap-1.5 bg-[#D4021D] hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer text-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Agregar al Carrito</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

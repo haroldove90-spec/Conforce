@@ -67,6 +67,7 @@ import {
   fetchDriversFromSupabase,
   upsertDriverInSupabase
 } from '../services/supabaseClient';
+import { openWhatsAppDirect } from '../utils/urlUtils';
 
 interface AppContextType {
   // Navigation & Roles
@@ -2789,7 +2790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         firstSearchedAt: now,
         lastSearchedAt: now,
         status: 'pending',
-        userLocationHint: userAddressLabel || 'Zona Metropolitana CDMX',
+        userLocationHint: userAddressLabel || 'Caracas, Distrito Capital (Venezuela)',
         notes: 'Búsqueda registrada automáticamente por cliente en Marketplace'
       };
 
@@ -2859,14 +2860,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSavedAddresses(prev => prev.filter(a => a.id !== id));
   };
 
-  // WhatsApp helper
+  // WhatsApp helper - Opens direct WhatsApp chat with the business
   const openWhatsAppWithPrompt = (initialQuery = '', targetBizId?: string) => {
     setWhatsappInitialPrompt(initialQuery);
     if (targetBizId) {
       const biz = businesses.find(b => b.id === targetBizId);
-      if (biz) setSelectedBusinessForDetail(biz);
+      if (biz) {
+        setSelectedBusinessForDetail(biz);
+        const bizPhone = biz.whatsapp || biz.phone || '+58 412 1234567';
+        const msg = initialQuery || `¡Hola *${biz.name}*! 👋 Vi su catálogo en ConForce Marketplace y deseo realizar un pedido.`;
+        openWhatsAppDirect(bizPhone, msg);
+        return;
+      }
     }
-    setIsWhatsAppModalOpen(true);
+    // General marketplace query fallback
+    if (initialQuery) {
+      openWhatsAppDirect('+58 412 1234567', initialQuery);
+    } else {
+      setIsWhatsAppModalOpen(true);
+    }
   };
 
   const updateChatbotConfig = (updates: Partial<ChatbotConfig>) => {

@@ -364,10 +364,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
             {/* Direct WhatsApp chat */}
             <button
-              onClick={() => openWhatsAppWithPrompt(`Hola, quiero información de ${activeBiz.name}`, activeBiz.id)}
-              className="flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white py-2 px-3 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+              onClick={() => openWhatsAppWithPrompt(`¡Hola *${activeBiz.name}*! 👋 Vi su ubicación en el mapa de ConForce Marketplace y deseo hacer un pedido.`, activeBiz.id)}
+              className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
             >
-              <MessageCircle className="w-3.5 h-3.5 text-[#D4021D]" />
+              <MessageCircle className="w-3.5 h-3.5 text-white" />
               <span>WhatsApp</span>
             </button>
           </div>

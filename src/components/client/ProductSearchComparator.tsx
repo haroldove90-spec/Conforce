@@ -513,13 +513,13 @@ export const ProductSearchComparator: React.FC<ProductSearchComparatorProps> = (
                         <Navigation className="w-3.5 h-3.5 text-[#D4021D]" />
                       </button>
 
-                      {/* WhatsApp Inquiry */}
+                      {/* WhatsApp Direct Order / Inquiry */}
                       <button
-                        onClick={() => openWhatsAppWithPrompt(`Hola ${business.name}, ¿tienen disponible "${product.name}" (Bs. ${product.price})?`, business.id)}
-                        className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 text-xs font-semibold shadow-2xs cursor-pointer"
-                        title="Consultar por WhatsApp"
+                        onClick={() => openWhatsAppWithPrompt(`¡Hola ${business.name}! 👋 ¿Tienen disponible "${product.name}" (Bs. ${product.price}) para entrega inmediata? Deseo pedirlo por ConForce.`, business.id)}
+                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-semibold shadow-2xs cursor-pointer transition-colors"
+                        title="Solicitar o consultar por WhatsApp directamente a este negocio"
                       >
-                        <MessageCircle className="w-3.5 h-3.5 text-[#D4021D]" />
+                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                       </button>
 
                       {/* Add To Cart / Buy Button */}

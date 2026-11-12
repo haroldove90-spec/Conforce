@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Bike
 } from 'lucide-react';
+import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../../utils/urlUtils';
 
 interface ClientExploreProps {
   onSelectBusiness: (biz: Business) => void;
@@ -57,7 +58,8 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
     openBusinessRegistration,
     openCorporateAuth,
     openDriverRegistration,
-    isMockDataCleared
+    isMockDataCleared,
+    exchangeRateUsd
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'businesses' | 'products' | 'comparator'>('businesses');
@@ -635,23 +637,48 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
                       </span>
                     </div>
 
-                    {/* Line 3: Delivery / Pickup info & Quick Add Button */}
+                    {/* Line 3: Delivery / Pickup info & Action Buttons */}
                     <div className="flex items-center justify-between gap-2 pt-0.5">
                       <div className="flex items-center gap-1 text-[11px] text-slate-600 font-medium">
                         <span>🛵 Envío o 🏬 Retiro</span>
                       </div>
 
-                      <button
-                        onClick={(e) => handleAddToCart(prod, e)}
-                        className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer ${
-                          inCartQty > 0
-                            ? 'bg-[#D4021D] text-white'
-                            : 'bg-red-50 hover:bg-red-100 text-[#D4021D] border border-red-200'
-                        }`}
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>{inCartQty > 0 ? `(${inCartQty}) Listo` : 'Agregar'}</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const msg = buildProductWhatsAppOrderMessage({
+                              productName: prod.name,
+                              priceBs: prod.price,
+                              priceUsd: exchangeRateUsd > 0 ? Number((prod.price / exchangeRateUsd).toFixed(2)) : undefined,
+                              businessName: prod.business.name,
+                              businessPhone: prod.business.whatsapp || prod.business.phone,
+                              quantity: 1,
+                              customerName: currentUser?.name,
+                              customerAddress: userAddressLabel
+                            });
+                            openWhatsAppDirect(prod.business.whatsapp || prod.business.phone, msg);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 transition-all shadow-2xs cursor-pointer active:scale-95"
+                          title="Pedir este producto directamente por WhatsApp al negocio"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600 group-hover:text-white" />
+                          <span>WhatsApp</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => handleAddToCart(prod, e)}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer ${
+                            inCartQty > 0
+                              ? 'bg-[#D4021D] text-white'
+                              : 'bg-red-50 hover:bg-red-100 text-[#D4021D] border border-red-200'
+                          }`}
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>{inCartQty > 0 ? `(${inCartQty}) Listo` : 'Agregar'}</span>
+                        </button>
+                      </div>
                     </div>
 
                   </div>
@@ -665,11 +692,11 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
       {/* Floating WhatsApp Quick Action Button */}
       <div className="pt-2 text-center">
         <button
-          onClick={() => openWhatsAppWithPrompt(searchQuery || 'Hola, quiero consultar opciones cercanas a mi ubicación')}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-4 py-2 rounded-2xl transition-all shadow-2xs cursor-pointer"
+          onClick={() => openWhatsAppWithPrompt(searchQuery ? `¡Hola! 👋 Estoy buscando "${searchQuery}" en ConForce Marketplace y deseo hacer un pedido.` : '¡Hola ConForce! 👋 Quiero consultar opciones y hacer un pedido por WhatsApp.')}
+          className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-4 py-2 rounded-2xl transition-all shadow-2xs cursor-pointer"
         >
-          <MessageCircle className="w-3.5 h-3.5 text-[#D4021D]" />
-          <span>¿No encuentras lo que buscas? Pídelo por WhatsApp IA</span>
+          <MessageCircle className="w-4 h-4 text-emerald-600" />
+          <span>¿No encuentras lo que buscas? Pídelo directo por WhatsApp</span>
         </button>
       </div>
 

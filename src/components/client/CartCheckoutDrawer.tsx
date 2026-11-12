@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DeliveryType, PaymentMethod, OrderChannel } from '../../types';
 import confetti from 'canvas-confetti';
+import { formatVenezuelanWhatsAppNumber, openWhatsAppDirect } from '../../utils/urlUtils';
 import {
   X,
   Trash2,
@@ -48,11 +49,12 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
     savedAddresses,
     currentUser,
     setIsClientAuthModalOpen,
-    setClientAuthIntent
+    setClientAuthIntent,
+    exchangeRateUsd
   } = useApp();
 
-  // Channel Selection: 'app' (App Móvil) or 'whatsapp' (WhatsApp Directo)
-  const [checkoutChannel, setCheckoutChannel] = useState<OrderChannel>('app');
+  // Channel Selection: Default to 'whatsapp' (Los pedidos se realizan al WhatsApp del negocio)
+  const [checkoutChannel, setCheckoutChannel] = useState<OrderChannel>('whatsapp');
   
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('delivery');
   const [addressChoice, setAddressChoice] = useState<'current_gps' | 'saved' | 'custom'>('current_gps');
@@ -121,39 +123,51 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
   const buildWhatsAppMessage = () => {
     const bizName = targetBusiness?.name || 'Comercio';
     const address = getResolvedAddress();
+    const grandTotalUsd = exchangeRateUsd > 0 ? (grandTotal / exchangeRateUsd).toFixed(2) : undefined;
+    const subtotalUsd = exchangeRateUsd > 0 ? (cartSubtotal / exchangeRateUsd).toFixed(2) : undefined;
+
     const itemsList = cart
-      .map((item) => `• ${item.quantity}x ${item.product.name} - Bs. ${item.product.price * item.quantity}`)
-      .join('\n');
+      .map((item) => {
+        const itemUnitPrice = item.itemTotalBs ?? item.product.price;
+        const itemLineTotal = itemUnitPrice * item.quantity;
+        const itemUsd = exchangeRateUsd > 0 ? (itemLineTotal / exchangeRateUsd).toFixed(2) : undefined;
+
+        let line = `• ${item.quantity}x *${item.product.name}* - Bs. ${itemLineTotal.toLocaleString('es-VE')}${itemUsd ? ` ($${itemUsd} USD)` : ''}`;
+        if (item.selectedVariantOption) {
+          line += `\n  🏷️ _${item.selectedVariantOption.variantName}: ${item.selectedVariantOption.optionLabel}_`;
+        }
+        if (item.selectedExtras && item.selectedExtras.length > 0) {
+          line += `\n  ➕ _Extras: ${item.selectedExtras.map(e => `${e.name} (+Bs. ${e.price})`).join(', ')}_`;
+        }
+        if (item.kitchenNotes) {
+          line += `\n  📝 _Nota: "${item.kitchenNotes}"_`;
+        }
+        return line;
+      })
+      .join('\n\n');
 
     return `🛍️ *NUEVO PEDIDO - CONFORCE MARKETPLACE*
-🏪 *Tienda:* ${bizName}
-👤 *Cliente:* ${customerName.trim() || 'Cliente ConForce'} (${customerPhone.trim() || 'Sin teléfono'})
-📍 *Modalidad:* ${deliveryType === 'pickup' ? '🏬 Retiro en Tienda' : '🛵 Envío a Domicilio'}
-📍 *Dirección:* ${address}
+🏪 *Tienda Destino:* ${bizName}
+👤 *Cliente:* ${customerName.trim() || 'Cliente'} (${customerPhone.trim() || 'Sin teléfono'})
+📍 *Modalidad:* ${deliveryType === 'pickup' ? '🏬 Retiro en Tienda' : '🛵 Despacho en Moto a Domicilio'}
+📍 *Dirección de Entrega:* ${address}
 
 📦 *DETALLE DE PRODUCTOS:*
 ${itemsList}
 
-💵 *Subtotal:* Bs. ${cartSubtotal}
-🛵 *Costo Envío:* ${deliveryFee === 0 ? 'Gratis' : `Bs. ${deliveryFee}`}
-🛡️ *Tarifa de Servicio (5%):* Bs. ${serviceFee}
-💰 *TOTAL A PAGAR:* Bs. ${grandTotal}
+─────────────────────────
+💵 *Subtotal:* Bs. ${cartSubtotal.toLocaleString('es-VE')}${subtotalUsd ? ` ($${subtotalUsd} USD)` : ''}
+🛵 *Costo Envío en Moto:* ${deliveryFee === 0 ? 'Gratis' : `Bs. ${deliveryFee.toLocaleString('es-VE')}`}
+🛡️ *Tarifa de Servicio (5%):* Bs. ${serviceFee.toLocaleString('es-VE')}
+💰 *TOTAL A PAGAR:* Bs. ${grandTotal.toLocaleString('es-VE')}${grandTotalUsd ? ` ($${grandTotalUsd} USD)` : ''}
+─────────────────────────
 💳 *Forma de Pago:* ${getPaymentMethodLabel(paymentMethod)}
-${paymentReference.trim() ? `🔢 *Nro. de Referencia:* ${paymentReference.trim()}` : ''}
-${orderNotes.trim() ? `📝 *Instrucciones/Notas:* ${orderNotes.trim()}` : ''}
-
-_Enviado desde ConForce Marketplace PWA - Checkout WhatsApp_`;
+${paymentReference.trim() ? `🔢 *Nro. de Referencia:* ${paymentReference.trim()}\n` : ''}${orderNotes.trim() ? `📝 *Instrucciones Especiales:* ${orderNotes.trim()}\n` : ''}
+_Enviado directamente desde ConForce Marketplace Venezuela_`;
   };
 
   const handlePlaceOrder = (channelOverride?: OrderChannel) => {
     if (cart.length === 0 || !targetBusiness) return;
-
-    // Detect if client has account or needs to register
-    if (!currentUser) {
-      setClientAuthIntent('order_checkout');
-      setIsClientAuthModalOpen(true);
-      return;
-    }
 
     const channelToUse = channelOverride || checkoutChannel;
     const finalDeliveryAddress = getResolvedAddress();
@@ -194,18 +208,17 @@ _Enviado desde ConForce Marketplace PWA - Checkout WhatsApp_`;
         // ignore
       }
 
-      // If checkout is via WhatsApp, open WhatsApp with prefilled message
+      // If checkout is via WhatsApp, open direct WhatsApp chat with the merchant
       if (channelToUse === 'whatsapp') {
         const rawMsg = buildWhatsAppMessage();
-        const phone = targetBusiness.phone.replace(/[^0-9]/g, '') || '525512345678';
-        const url = `https://wa.me/${phone}?text=${encodeURIComponent(rawMsg)}`;
-        window.open(url, '_blank', 'noopener,noreferrer');
+        const bizPhone = targetBusiness.whatsapp || targetBusiness.phone;
+        openWhatsAppDirect(bizPhone, rawMsg);
       }
 
       setIsSubmitting(false);
       onClose();
       onOrderSuccess(newOrder.id);
-    }, 800);
+    }, 600);
   };
 
   return (
@@ -284,21 +297,24 @@ _Enviado desde ConForce Marketplace PWA - Checkout WhatsApp_`;
                   </div>
                 </button>
 
-                {/* Opción B: Vía WhatsApp */}
+                {/* Opción B: Vía WhatsApp (Recomendado) */}
                 <button
                   onClick={() => setCheckoutChannel('whatsapp')}
-                  className={`p-3 rounded-2xl border flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-3 rounded-2xl border flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer relative ${
                     checkoutChannel === 'whatsapp'
-                      ? 'bg-slate-100 border-slate-900 text-slate-900 shadow-xs ring-1 ring-slate-900'
+                      ? 'bg-emerald-50 border-emerald-600 text-emerald-950 shadow-xs ring-2 ring-emerald-500'
                       : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+                  <span className="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-black uppercase">
+                    Directo
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
                     <MessageCircle className="w-4 h-4 fill-white" />
                   </div>
                   <div>
-                    <p className="text-xs font-black text-slate-900">Vía WhatsApp</p>
-                    <p className="text-[10px] text-slate-600 font-semibold">Envío de ticket directo</p>
+                    <p className="text-xs font-black text-slate-900">WhatsApp del Negocio</p>
+                    <p className="text-[10px] text-emerald-700 font-bold">Despacho y pedido directo</p>
                   </div>
                 </button>
               </div>
@@ -758,17 +774,17 @@ _Enviado desde ConForce Marketplace PWA - Checkout WhatsApp_`;
                   <button
                     onClick={() => handlePlaceOrder('whatsapp')}
                     disabled={isSubmitting}
-                    className="w-full flex items-center justify-center gap-2 bg-[#D4021D] hover:bg-[#b50218] text-white font-extrabold py-3 px-4 rounded-2xl shadow-md shadow-red-600/25 text-xs sm:text-sm transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3 px-4 rounded-2xl shadow-lg shadow-emerald-700/25 text-xs sm:text-sm transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Abriendo WhatsApp...</span>
+                        <span>Abriendo WhatsApp del Negocio...</span>
                       </div>
                     ) : (
                       <>
                         <MessageCircle className="w-4 h-4 fill-white" />
-                        <span>Enviar Pedido por WhatsApp (Bs. ${grandTotal})</span>
+                        <span>Enviar Pedido al WhatsApp del Negocio (Bs. {grandTotal.toLocaleString('es-VE')})</span>
                       </>
                     )}
                   </button>
