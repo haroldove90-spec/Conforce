@@ -19,8 +19,15 @@ import {
   TrendingUp,
   Package,
   Power,
-  RefreshCw
+  RefreshCw,
+  Camera,
+  Trash2,
+  Eye,
+  FileCheck2,
+  X,
+  Upload
 } from 'lucide-react';
+import { compressAndEncodeImage } from '../../utils/imageUtils';
 
 export const DriverDashboard: React.FC = () => {
   const {
@@ -32,11 +39,14 @@ export const DriverDashboard: React.FC = () => {
     advanceDriverDeliveryStep,
     openExternalNavigation,
     currentUser,
-    openDriverRegistration
+    openDriverRegistration,
+    updateDriverProfile
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'deliveries' | 'history' | 'wallet' | 'profile'>('deliveries');
   const [payoutRequested, setPayoutRequested] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState<{ title: string; url: string } | null>(null);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
 
   const driver = currentDriverProfile || drivers[0];
 
@@ -508,18 +518,72 @@ export const DriverDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: MI MOTO & PERFIL */}
+      {/* TAB 4: MI MOTO, DOCUMENTOS & PERFIL */}
       {activeTab === 'profile' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 space-y-4 text-xs">
-          <h2 className="text-base font-extrabold text-slate-900">
-            Ficha del Mensajero y Motocicleta
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-              <span className="block text-[10px] text-slate-400 uppercase font-bold">Conductor</span>
-              <p className="font-extrabold text-slate-900 text-sm">{driver.fullName}</p>
-              <p className="text-slate-600">C.I. {driver.ciDni}</p>
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 space-y-6 text-xs">
+          {/* Driver Header with Avatar */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <div className="relative group shrink-0">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-200 border-2 border-emerald-500 shadow-md flex items-center justify-center">
+                {driver.avatarUrl ? (
+                  <img
+                    src={driver.avatarUrl}
+                    alt={driver.fullName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Bike className="w-10 h-10 text-emerald-600" />
+                )}
+              </div>
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center cursor-pointer shadow-md transition-transform hover:scale-110">
+                <Camera className="w-3.5 h-3.5" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      setUploadingField('avatarUrl');
+                      const b64 = await compressAndEncodeImage(file, 800, 800, 0.85);
+                      await updateDriverProfile(driver.id, { avatarUrl: b64 });
+                    } finally {
+                      setUploadingField(null);
+                    }
+                  }}
+                />
+              </label>
             </div>
+
+            <div className="flex-1 text-center sm:text-left space-y-1">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <h2 className="text-lg font-extrabold text-slate-900">{driver.fullName}</h2>
+                <span className="text-xs text-slate-400">@{driver.username}</span>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    driver.status === 'active'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : driver.status === 'pending_approval'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {driver.status === 'active' ? 'Mensajero Habilitado ✓' : driver.status === 'pending_approval' ? 'En Revisión' : 'Inactivo'}
+                </span>
+              </div>
+              <p className="text-slate-600">
+                C.I. <strong>{driver.ciDni}</strong> · Tel: {driver.phone} · {driver.city || 'Caracas'}
+              </p>
+              <p className="text-slate-500 text-[11px]">
+                {driver.totalDeliveries} despachos entregados · Calificación: ⭐ {driver.rating.toFixed(1)} / 5.0
+              </p>
+            </div>
+          </div>
+
+          {/* Vehículo y Datos Operativos */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
               <span className="block text-[10px] text-slate-400 uppercase font-bold">Vehículo</span>
               <p className="font-extrabold text-slate-900 text-sm">{driver.motorcycleBrandModel}</p>
@@ -527,11 +591,192 @@ export const DriverDashboard: React.FC = () => {
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
               <span className="block text-[10px] text-slate-400 uppercase font-bold">Licencia de Conducir</span>
-              <p className="font-semibold text-slate-800">{driver.driverLicense || 'Verificada en sede'}</p>
+              <p className="font-semibold text-slate-800">{driver.driverLicense || 'En trámite / Verificada'}</p>
+              <p className="text-slate-500 text-[11px]">Válida para moto 150cc+</p>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-              <span className="block text-[10px] text-slate-400 uppercase font-bold">Ciudad / Cobertura</span>
-              <p className="font-semibold text-slate-800">{driver.city || 'Caracas'}</p>
+              <span className="block text-[10px] text-slate-400 uppercase font-bold">Pago Móvil Asignado</span>
+              <p className="font-semibold text-slate-800">{driver.bankName || 'Banesco'}</p>
+              <p className="text-slate-600 text-[11px]">{driver.bankPhone || driver.phone}</p>
+            </div>
+          </div>
+
+          {/* Galería de Documentos & Fotos Oficiales */}
+          <div className="space-y-3 pt-2 border-t border-slate-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Documentación & Fotografías Oficiales</span>
+                </h3>
+                <p className="text-slate-500 text-[11px]">
+                  Toma fotos desde la cámara de tu teléfono para mantener tus documentos actualizados y validados ante Superadmin.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                {
+                  id: 'idDocumentPhoto',
+                  title: 'Cédula de Identidad',
+                  photoUrl: driver.idDocumentPhoto,
+                  desc: 'Documento C.I. laminado'
+                },
+                {
+                  id: 'licensePhoto',
+                  title: 'Licencia de Conducir',
+                  photoUrl: driver.licensePhoto,
+                  desc: 'Licencia 2da/3ra grado'
+                },
+                {
+                  id: 'motorcyclePhoto',
+                  title: 'Foto Moto con Placa',
+                  photoUrl: driver.motorcyclePhoto,
+                  desc: 'Vehículo con placa visible'
+                },
+                {
+                  id: 'vehicleDocPhoto',
+                  title: 'Carnet de Circulación',
+                  photoUrl: driver.vehicleDocPhoto,
+                  desc: 'Título o carnet INTT'
+                }
+              ].map((doc) => (
+                <div
+                  key={doc.id}
+                  className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col justify-between space-y-2 group"
+                >
+                  <div className="flex items-start justify-between gap-1">
+                    <div>
+                      <span className="font-bold text-slate-900 text-xs block">{doc.title}</span>
+                      <span className="text-[10px] text-slate-500">{doc.desc}</span>
+                    </div>
+                    {doc.photoUrl && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold shrink-0">
+                        <FileCheck2 className="w-2.5 h-2.5" />
+                        OK
+                      </span>
+                    )}
+                  </div>
+
+                  {doc.photoUrl ? (
+                    <div className="relative w-full h-28 rounded-xl overflow-hidden bg-slate-200 border border-slate-300">
+                      <img
+                        src={doc.photoUrl}
+                        alt={doc.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPhoto({ title: doc.title, url: doc.photoUrl! })}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg cursor-pointer"
+                          title="Ver en grande"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <label className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg cursor-pointer">
+                          <Camera className="w-3.5 h-3.5" />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                setUploadingField(doc.id);
+                                const b64 = await compressAndEncodeImage(file, 1200, 1200, 0.82);
+                                await updateDriverProfile(driver.id, { [doc.id]: b64 });
+                              } finally {
+                                setUploadingField(null);
+                              }
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => updateDriverProfile(driver.id, { [doc.id]: undefined })}
+                          className="p-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg cursor-pointer"
+                          title="Eliminar foto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="h-28 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer bg-white hover:bg-emerald-50/30 transition-colors p-2 text-center">
+                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center">
+                        {uploadingField === doc.id ? (
+                          <div className="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                        )}
+                      </div>
+                      <span className="font-bold text-[11px] text-slate-700">
+                        {uploadingField === doc.id ? 'Subiendo...' : 'Tomar Foto'}
+                      </span>
+                      <span className="text-[9px] text-slate-400">Cámara / Archivo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            setUploadingField(doc.id);
+                            const b64 = await compressAndEncodeImage(file, 1200, 1200, 0.82);
+                            await updateDriverProfile(driver.id, { [doc.id]: b64 });
+                          } finally {
+                            setUploadingField(null);
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Preview de Foto en Grande */}
+      {previewPhoto && (
+        <div
+          onClick={() => setPreviewPhoto(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-2xl w-full bg-zinc-950 border border-zinc-800 rounded-3xl p-4 text-white shadow-2xl space-y-3"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <h3 className="font-bold text-sm text-white">{previewPhoto.title}</h3>
+              <button
+                onClick={() => setPreviewPhoto(null)}
+                className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-hidden rounded-xl bg-black flex items-center justify-center">
+              <img
+                src={previewPhoto.url}
+                alt={previewPhoto.title}
+                className="max-h-[70vh] w-auto object-contain rounded-xl"
+              />
+            </div>
+            <div className="text-right">
+              <button
+                onClick={() => setPreviewPhoto(null)}
+                className="px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 cursor-pointer"
+              >
+                Cerrar Visor
+              </button>
             </div>
           </div>
         </div>

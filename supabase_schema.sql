@@ -202,6 +202,11 @@ CREATE TABLE IF NOT EXISTS public.drivers (
     bank_phone TEXT,
     bank_id_number TEXT,
     city TEXT DEFAULT 'Caracas',
+    avatar_url TEXT,
+    id_document_photo TEXT,
+    license_photo TEXT,
+    motorcycle_photo TEXT,
+    vehicle_doc_photo TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -225,6 +230,11 @@ ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT 'Bane
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_phone TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_id_number TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Caracas';
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS id_document_photo TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS license_photo TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS motorcycle_photo TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS vehicle_doc_photo TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 

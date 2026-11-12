@@ -1,7 +1,138 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { X, Bike, CheckCircle2, AlertCircle, ShieldCheck, CreditCard, User, Phone, FileText, MapPin } from 'lucide-react';
+import {
+  X,
+  Bike,
+  CheckCircle2,
+  AlertCircle,
+  CreditCard,
+  User,
+  Camera,
+  Trash2,
+  UploadCloud,
+  FileCheck2,
+  Eye,
+  ShieldCheck
+} from 'lucide-react';
 import { PasswordInput } from './PasswordInput';
+import { compressAndEncodeImage } from '../../utils/imageUtils';
+
+interface PhotoSlotProps {
+  label: string;
+  description: string;
+  photoUrl: string | undefined;
+  onPhotoSelected: (base64: string) => void;
+  onPhotoRemoved: () => void;
+  required?: boolean;
+}
+
+const DriverPhotoUploadCard: React.FC<PhotoSlotProps> = ({
+  label,
+  description,
+  photoUrl,
+  onPhotoSelected,
+  onPhotoRemoved,
+  required = false
+}) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    setError(null);
+    try {
+      const base64 = await compressAndEncodeImage(file, 1200, 1200, 0.82);
+      onPhotoSelected(base64);
+    } catch (err: any) {
+      setError(err.message || 'Error al procesar la foto');
+    } finally {
+      setIsProcessing(false);
+      // Reset input value to allow re-selecting same file
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col justify-between space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-white text-xs">{label}</span>
+            {required && <span className="text-amber-400 text-[10px] font-bold">*</span>}
+          </div>
+          <p className="text-[10px] text-zinc-400 mt-0.5 leading-snug">{description}</p>
+        </div>
+        {photoUrl && (
+          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/60 text-[9px] font-bold text-emerald-300">
+            <FileCheck2 className="w-3 h-3 text-emerald-400" />
+            Cargada ✓
+          </span>
+        )}
+      </div>
+
+      {photoUrl ? (
+        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-zinc-700 bg-zinc-950 group">
+          <img
+            src={photoUrl}
+            alt={label}
+            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg cursor-pointer text-[10px] flex items-center gap-1"
+            >
+              <Camera className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Cambiar</span>
+            </button>
+            <button
+              type="button"
+              onClick={onPhotoRemoved}
+              className="p-1.5 bg-red-900/80 hover:bg-red-800 text-red-200 rounded-lg cursor-pointer text-[10px] flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-300" />
+              <span>Quitar</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-dashed border-zinc-700 hover:border-emerald-500 rounded-xl p-3 flex flex-col items-center justify-center gap-1 text-center cursor-pointer transition-colors bg-zinc-950/50 hover:bg-zinc-900/50"
+        >
+          <div className="w-8 h-8 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center">
+            {isProcessing ? (
+              <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Camera className="w-4 h-4 text-emerald-400" />
+            )}
+          </div>
+          <span className="text-[11px] font-bold text-zinc-300">
+            {isProcessing ? 'Optimizando foto...' : 'Tomar Foto o Subir'}
+          </span>
+          <span className="text-[9px] text-zinc-500">Cámara del dispositivo o galería</span>
+        </div>
+      )}
+
+      {error && <span className="text-[10px] text-red-400 font-medium">{error}</span>}
+
+      {/* Hidden file input supporting mobile camera capture directly */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+    </div>
+  );
+};
 
 export const RegisterDriverModal: React.FC = () => {
   const {
@@ -21,7 +152,14 @@ export const RegisterDriverModal: React.FC = () => {
   const [motorcycleBrandModel, setMotorcycleBrandModel] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
   const [driverLicense, setDriverLicense] = useState('');
-  
+
+  // 5 Document Photos (Direct Device / Camera Uploads)
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  const [idDocumentPhoto, setIdDocumentPhoto] = useState<string | undefined>(undefined);
+  const [licensePhoto, setLicensePhoto] = useState<string | undefined>(undefined);
+  const [motorcyclePhoto, setMotorcyclePhoto] = useState<string | undefined>(undefined);
+  const [vehicleDocPhoto, setVehicleDocPhoto] = useState<string | undefined>(undefined);
+
   // Pago Móvil info for payouts
   const [bankName, setBankName] = useState('Banesco (0134)');
   const [bankPhone, setBankPhone] = useState('');
@@ -68,7 +206,12 @@ export const RegisterDriverModal: React.FC = () => {
         bankName,
         bankPhone: bankPhone.trim() || phone.trim(),
         bankIdNumber: bankIdNumber.trim() || ciDni.trim(),
-        city: city.trim()
+        city: city.trim(),
+        avatarUrl,
+        idDocumentPhoto,
+        licensePhoto,
+        motorcyclePhoto,
+        vehicleDocPhoto
       });
 
       if (res.success) {
@@ -91,8 +234,7 @@ export const RegisterDriverModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="relative w-full max-w-xl my-8 bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-6 text-white shadow-2xl space-y-4">
-        
+      <div className="relative w-full max-w-2xl my-8 bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-6 text-white shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800/80 pb-3">
           <div className="flex items-center gap-3">
@@ -123,13 +265,29 @@ export const RegisterDriverModal: React.FC = () => {
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-bold text-white">¡Solicitud de Registro Enviada!</h3>
-            <p className="text-sm text-zinc-300 max-w-md mx-auto">
-              {successResult}
-            </p>
+            <p className="text-sm text-zinc-300 max-w-md mx-auto">{successResult}</p>
             <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-2xl text-xs text-zinc-400 text-left space-y-1">
-              <p><strong className="text-white">Usuario de acceso:</strong> @{username}</p>
-              <p><strong className="text-white">Moto registrada:</strong> {motorcycleBrandModel} (Placa: {plateNumber})</p>
-              <p><strong className="text-white">Pago Móvil asignado:</strong> {bankName} · {bankPhone || phone}</p>
+              <p>
+                <strong className="text-white">Usuario de acceso:</strong> @{username}
+              </p>
+              <p>
+                <strong className="text-white">Moto registrada:</strong> {motorcycleBrandModel} (Placa: {plateNumber})
+              </p>
+              <p>
+                <strong className="text-white">Documentos adjuntos:</strong>{' '}
+                {[
+                  avatarUrl && 'Foto personal',
+                  idDocumentPhoto && 'Cédula C.I.',
+                  licensePhoto && 'Licencia',
+                  motorcyclePhoto && 'Foto de la moto',
+                  vehicleDocPhoto && 'Carnet circulación'
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'Pendientes de validación'}
+              </p>
+              <p>
+                <strong className="text-white">Pago Móvil asignado:</strong> {bankName} · {bankPhone || phone}
+              </p>
             </div>
             <div className="pt-2 flex flex-col sm:flex-row gap-2">
               <button
@@ -169,9 +327,7 @@ export const RegisterDriverModal: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Nombre y Apellido *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Nombre y Apellido *</label>
                   <input
                     type="text"
                     required
@@ -182,9 +338,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Cédula de Identidad (C.I.) *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Cédula de Identidad (C.I.) *</label>
                   <input
                     type="text"
                     required
@@ -195,9 +349,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Teléfono Móvil (WhatsApp) *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Teléfono Móvil (WhatsApp) *</label>
                   <input
                     type="text"
                     required
@@ -208,9 +360,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Ciudad / Zona de Cobertura *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Ciudad / Zona de Cobertura *</label>
                   <input
                     type="text"
                     required
@@ -221,9 +371,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Nombre de Usuario (Para iniciar sesión) *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Nombre de Usuario (Para iniciar sesión) *</label>
                   <input
                     type="text"
                     required
@@ -234,9 +382,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Contraseña *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Contraseña *</label>
                   <PasswordInput
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -255,9 +401,7 @@ export const RegisterDriverModal: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Marca, Modelo y Color *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Marca, Modelo y Color *</label>
                   <input
                     type="text"
                     required
@@ -268,9 +412,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Placa de la Moto *
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Placa de la Moto *</label>
                   <input
                     type="text"
                     required
@@ -281,9 +423,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div className="sm:col-span-3">
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Número de Licencia de Conducir (2da o 3ra)
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Número de Licencia de Conducir (2da o 3ra)</label>
                   <input
                     type="text"
                     placeholder="Ej. LIC-24891302"
@@ -295,17 +435,72 @@ export const RegisterDriverModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Section 3: Datos de Pago Móvil para Cobro de Carreras */}
+            {/* Section 3: Subida de Fotos y Documentos desde el Dispositivo */}
+            <div className="space-y-3 pt-2 border-t border-zinc-800/80">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
+                  <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>3. Documentos & Fotos (Toma foto directa desde tu teléfono)</span>
+                </div>
+                <span className="text-[10px] text-emerald-400 font-semibold">
+                  Fotos se guardan en el sistema y Supabase
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <DriverPhotoUploadCard
+                  label="1. Selfie / Foto de Perfil"
+                  description="Foto de frente, con buena luz y sin casco ni lentes oscuros"
+                  photoUrl={avatarUrl}
+                  onPhotoSelected={(b64) => setAvatarUrl(b64)}
+                  onPhotoRemoved={() => setAvatarUrl(undefined)}
+                />
+
+                <DriverPhotoUploadCard
+                  label="2. Cédula de Identidad (C.I.)"
+                  description="Foto clara y legible de la cédula venezolana"
+                  photoUrl={idDocumentPhoto}
+                  onPhotoSelected={(b64) => setIdDocumentPhoto(b64)}
+                  onPhotoRemoved={() => setIdDocumentPhoto(undefined)}
+                />
+
+                <DriverPhotoUploadCard
+                  label="3. Licencia de Conducir"
+                  description="Foto de la licencia vigente (grado 2da o superior)"
+                  photoUrl={licensePhoto}
+                  onPhotoSelected={(b64) => setLicensePhoto(b64)}
+                  onPhotoRemoved={() => setLicensePhoto(undefined)}
+                />
+
+                <DriverPhotoUploadCard
+                  label="4. Foto de la Moto con Placa"
+                  description="Foto del vehículo donde se distinga con claridad la placa"
+                  photoUrl={motorcyclePhoto}
+                  onPhotoSelected={(b64) => setMotorcyclePhoto(b64)}
+                  onPhotoRemoved={() => setMotorcyclePhoto(undefined)}
+                />
+
+                <div className="sm:col-span-2">
+                  <DriverPhotoUploadCard
+                    label="5. Carnet de Circulación / Documento Vehicular"
+                    description="Carnet de circulación expedido por el INTT o título de propiedad"
+                    photoUrl={vehicleDocPhoto}
+                    onPhotoSelected={(b64) => setVehicleDocPhoto(b64)}
+                    onPhotoRemoved={() => setVehicleDocPhoto(undefined)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Datos de Pago Móvil para Cobro de Carreras */}
             <div className="space-y-3 pt-2 border-t border-zinc-800/80">
               <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
                 <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
-                <span>3. Datos para Pago Móvil (Liquidación de Ganancias en Bs.)</span>
+                <span>4. Datos para Pago Móvil (Liquidación de Ganancias en Bs.)</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Banco Receptor
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Banco Receptor</label>
                   <select
                     value={bankName}
                     onChange={(e) => setBankName(e.target.value)}
@@ -320,9 +515,7 @@ export const RegisterDriverModal: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Teléfono Pago Móvil
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Teléfono Pago Móvil</label>
                   <input
                     type="text"
                     placeholder="0412 1234567"
@@ -332,9 +525,7 @@ export const RegisterDriverModal: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">
-                    Cédula Titular
-                  </label>
+                  <label className="block text-zinc-300 font-semibold mb-1">Cédula Titular</label>
                   <input
                     type="text"
                     placeholder="V-24891302"
@@ -356,13 +547,13 @@ export const RegisterDriverModal: React.FC = () => {
                   className="mt-0.5 rounded border-zinc-700 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className="text-[11px] leading-relaxed text-zinc-400">
-                  Declaro que poseo casco reglamentario, motocicleta en condiciones óptimas de circulación, documentación vigente y acepto las tarifas de despacho de ConForce.
+                  Declaro que poseo casco reglamentario, motocicleta en condiciones óptimas de circulación, documentación vigente y fotos fidedignas, y acepto las tarifas de despacho de ConForce.
                 </span>
               </label>
             </div>
 
             {/* Buttons */}
-            <div className="pt-2 border-t border-zinc-800 flex items-center justify-end gap-3">
+            <div className="pt-2 border-t border-zinc-800 flex items-center justify-end gap-3 sticky bottom-0 bg-zinc-950 py-2">
               <button
                 type="button"
                 onClick={handleClose}
@@ -375,7 +566,7 @@ export const RegisterDriverModal: React.FC = () => {
                 disabled={loading}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold cursor-pointer transition-colors shadow-lg shadow-emerald-950/40"
               >
-                {loading ? 'Registrando...' : 'Completar Registro de Motorizado'}
+                {loading ? 'Registrando y Subiendo...' : 'Completar Registro con Fotos'}
               </button>
             </div>
           </form>

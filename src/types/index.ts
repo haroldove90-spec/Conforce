@@ -97,6 +97,28 @@ export interface Product {
   variants?: ProductVariant[];
 }
 
+export interface BoostPlan {
+  id: 'boost_3d' | 'boost_7d' | 'boost_15d';
+  name: string;
+  days: number;
+  price: number;
+  impressionsEstimate: string;
+  badgeText: string;
+  recommended?: boolean;
+}
+
+export interface FailedSearchRecord {
+  id: string;
+  term: string;
+  categoryGuess: string;
+  count: number;
+  firstSearchedAt: string;
+  lastSearchedAt: string;
+  status: 'pending' | 'evaluating' | 'added' | 'dismissed';
+  userLocationHint?: string;
+  notes?: string;
+}
+
 export interface SelectedExtra {
   id: string;
   name: string;
@@ -277,5 +299,12 @@ export interface DriverProfile {
   bankIdNumber?: string;
   city?: string;
   createdAt: string;
+
+  // Fotografías y Documentos de Verificación desde dispositivo/cámara
+  avatarUrl?: string; // Foto de perfil / selfie del conductor
+  idDocumentPhoto?: string; // Foto de Cédula de Identidad / DNI
+  licensePhoto?: string; // Foto de la Licencia de Conducir
+  motorcyclePhoto?: string; // Foto de la Moto y Placa
+  vehicleDocPhoto?: string; // Carnet de circulación / Título
 }
 

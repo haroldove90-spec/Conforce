@@ -130,13 +130,21 @@ export function mapProductFromDB(row: any): Product {
     name: row.name,
     description: row.description || '',
     price: Number(row.price),
+    priceUsd: row.price_usd ? Number(row.price_usd) : undefined,
     originalPrice: row.original_price ? Number(row.original_price) : undefined,
     category: row.category || 'General',
     image: row.image || '',
+    images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : undefined,
     inStock: Boolean(row.in_stock ?? true),
     stockCount: Number(row.stock_count ?? 50),
     tags: Array.isArray(row.tags) ? row.tags : [],
-    isOfferOfTheDay: Boolean(row.is_offer_of_the_day ?? false)
+    isOfferOfTheDay: Boolean(row.is_offer_of_the_day ?? false),
+    hasVariants: Boolean(row.has_variants ?? false),
+    variants: row.variants ? (typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants) : undefined,
+    ingredients: row.ingredients ? (typeof row.ingredients === 'string' ? JSON.parse(row.ingredients) : row.ingredients) : undefined,
+    extras: row.extras ? (typeof row.extras === 'string' ? JSON.parse(row.extras) : row.extras) : undefined,
+    preparationTime: row.preparation_time || undefined,
+    foodTags: row.food_tags ? (typeof row.food_tags === 'string' ? JSON.parse(row.food_tags) : row.food_tags) : undefined
   };
 }
 
@@ -147,13 +155,21 @@ export function mapProductToDB(prod: Product): any {
     name: prod.name,
     description: prod.description,
     price: prod.price,
+    price_usd: prod.priceUsd || 0,
     original_price: prod.originalPrice || null,
     category: prod.category,
     image: prod.image,
+    images: prod.images || [],
     in_stock: prod.inStock,
     stock_count: prod.stockCount,
     tags: prod.tags,
-    is_offer_of_the_day: prod.isOfferOfTheDay
+    is_offer_of_the_day: prod.isOfferOfTheDay,
+    has_variants: prod.hasVariants || false,
+    variants: prod.variants || [],
+    ingredients: prod.ingredients || [],
+    extras: prod.extras || [],
+    preparation_time: prod.preparationTime || null,
+    food_tags: prod.foodTags || []
   };
 }
 
@@ -1000,13 +1016,23 @@ export async function clearAllSampleDataFromSupabase(): Promise<{ success: boole
       errors.push(`Empleados: ${empErr.message}`);
     }
 
-    // 8. Delete all demo users EXCEPT admin_master
-    const { error: userErr } = await supabase.from('users').delete().neq('username', 'admin_master');
+    // 8. Delete sample drivers
+    const { error: drvErr } = await supabase.from('drivers').delete().neq('id', '__keep_none__');
+    if (drvErr && !drvErr.message.includes('does not exist')) {
+      errors.push(`Motorizados: ${drvErr.message}`);
+    }
+
+    // 9. Delete all demo users EXCEPT admin_master and haroldo90
+    const { error: userErr } = await supabase
+      .from('users')
+      .delete()
+      .neq('username', 'admin_master')
+      .neq('username', 'haroldo90');
     if (userErr && !userErr.message.includes('does not exist')) {
       errors.push(`Usuarios: ${userErr.message}`);
     }
 
-    // 9. Ensure admin_master is guaranteed to exist
+    // 10. Ensure admin_master is guaranteed to exist
     try {
       await supabase.from('users').upsert({
         id: 'usr_admin_master',
@@ -1034,7 +1060,7 @@ export async function clearAllSampleDataFromSupabase(): Promise<{ success: boole
 
     return {
       success: true,
-      message: 'Tablas de productos, órdenes, comercios y usuarios demo limpiadas en Supabase (admin_master preservado).'
+      message: 'Tablas de productos, órdenes, comercios, motorizados y usuarios demo limpiadas en Supabase (admin_master y haroldo90 preservados).'
     };
   } catch (err: any) {
     return {
@@ -1070,7 +1096,12 @@ export function mapDriverFromDB(row: any): DriverProfile {
     bankPhone: row.bank_phone || undefined,
     bankIdNumber: row.bank_id_number || undefined,
     city: row.city || 'Caracas',
-    createdAt: row.created_at || new Date().toISOString()
+    createdAt: row.created_at || new Date().toISOString(),
+    avatarUrl: row.avatar_url || undefined,
+    idDocumentPhoto: row.id_document_photo || undefined,
+    licensePhoto: row.license_photo || undefined,
+    motorcyclePhoto: row.motorcycle_photo || undefined,
+    vehicleDocPhoto: row.vehicle_doc_photo || undefined
   };
 }
 
@@ -1096,7 +1127,12 @@ export function mapDriverToDB(driver: DriverProfile): any {
     bank_phone: driver.bankPhone || null,
     bank_id_number: driver.bankIdNumber || null,
     city: driver.city || 'Caracas',
-    created_at: driver.createdAt
+    created_at: driver.createdAt,
+    avatar_url: driver.avatarUrl || null,
+    id_document_photo: driver.idDocumentPhoto || null,
+    license_photo: driver.licensePhoto || null,
+    motorcycle_photo: driver.motorcyclePhoto || null,
+    vehicle_doc_photo: driver.vehicleDocPhoto || null
   };
 }
 

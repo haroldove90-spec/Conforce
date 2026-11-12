@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Business, Product, Order, OrderStatus, ProductVariantOption, ProductExtra } from '../../types';
+import { Business, Product, Order, OrderStatus, ProductVariantOption, ProductVariant, ProductExtra } from '../../types';
 import {
   Store,
   MapPin,
@@ -68,11 +68,21 @@ export const SellerDashboard: React.FC = () => {
     logout,
     exchangeRateUsd,
     setExchangeRateUsd,
-    formatCurrency
+    formatCurrency,
+    currentUser
   } = useApp();
 
-  // Active business
-  const biz = currentSellerBusiness || businesses[0];
+  // Get all businesses owned by this seller if role is seller
+  const sellerOwnedBusinesses = businesses.filter(
+    (b) =>
+      b.ownerUsername?.toLowerCase() === currentUser?.username?.toLowerCase() ||
+      (currentUser?.businessId && b.id === currentUser.businessId)
+  );
+
+  // Active business: prioritize seller's own business, then selectedBusinessId, then currentSellerBusiness
+  const biz = (currentUser?.role === 'seller' && sellerOwnedBusinesses.length > 0)
+    ? (sellerOwnedBusinesses.find((b) => b.id === selectedBusinessId) || sellerOwnedBusinesses[0])
+    : (currentSellerBusiness || businesses.find((b) => b.id === selectedBusinessId) || businesses[0]);
 
   // Seller orders filtered for this business
   const sellerOrders = biz ? orders.filter((o) => o.businessId === biz.id) : [];
@@ -213,18 +223,18 @@ export const SellerDashboard: React.FC = () => {
     setEditingProduct(null);
     setProdName('');
     setProdDesc('');
-    setProdPrice(150);
+    setProdPrice(100);
     setProdOriginalPrice(undefined);
-    setProdCategory(biz?.category === 'farmacia' ? 'Medicamentos' : (biz?.category === 'restaurante' ? 'Platillos' : 'General'));
+    setProdCategory(biz?.category || 'General');
     setProdImage('');
     setProdImages([]);
-    setProdStock(25);
-    setProdTags(biz?.category === 'farmacia' ? 'paracetamol, dolor, medicina' : 'hamburguesa, combo, cena');
+    setProdStock(50);
+    setProdTags(''); // Clean, no pre-filled fake tags!
     setProdIsOffer(false);
     setProdHasVariants(false);
     setProdVariantName('Tamaño / Porción');
     setProdVariantOptions([]);
-    setIsFoodProduct(biz?.category === 'restaurante');
+    setIsFoodProduct(biz?.category?.toLowerCase().includes('restauran') || biz?.category?.toLowerCase().includes('comida') || false);
     setProdIngredients([]);
     setNewIngredientInput('');
     setProdExtras([]);
@@ -250,7 +260,7 @@ export const SellerDashboard: React.FC = () => {
     setProdHasVariants(!!prod.hasVariants);
     setProdVariantName(prod.variants?.[0]?.name || 'Tamaño / Porción');
     setProdVariantOptions(prod.variants?.[0]?.options || []);
-    setIsFoodProduct(biz?.category === 'restaurante' || !!prod.ingredients?.length || !!prod.extras?.length);
+    setIsFoodProduct(biz?.category?.toLowerCase().includes('restauran') || !!prod.ingredients?.length || !!prod.extras?.length);
     setProdIngredients(prod.ingredients || []);
     setNewIngredientInput('');
     setProdExtras(prod.extras || []);
@@ -269,12 +279,11 @@ export const SellerDashboard: React.FC = () => {
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
 
-    // If no custom photo was uploaded, use appropriate default
-    const finalImage = prodImage || (
-      isFoodProduct
-        ? 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&auto=format&fit=crop&q=60'
-        : 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500&auto=format&fit=crop&q=60'
-    );
+    // Clean dynamic SVG placeholder if no custom camera photo was uploaded (no unrelated mock pictures)
+    const initials = prodName.trim().slice(0, 2).toUpperCase();
+    const cleanPlaceholder = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="%23f8fafc"/><circle cx="200" cy="180" r="80" fill="%23fee2e2"/><text x="50%" y="48%" font-family="sans-serif" font-weight="900" font-size="44" fill="%23D4021D" text-anchor="middle" dominant-baseline="middle">${encodeURIComponent(initials || '🛍️')}</text><text x="50%" y="78%" font-family="sans-serif" font-weight="700" font-size="20" fill="%23334155" text-anchor="middle" dominant-baseline="middle">${encodeURIComponent(prodName.trim().slice(0, 20))}</text></svg>`;
+
+    const finalImage = prodImage || cleanPlaceholder;
 
     const priceUsd = exchangeRateUsd > 0 ? Number((prodPrice / exchangeRateUsd).toFixed(2)) : 0;
 
@@ -376,11 +385,11 @@ export const SellerDashboard: React.FC = () => {
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-600 font-medium">Mi Negocio:</span>
           <select
-            value={selectedBusinessId}
+            value={biz.id}
             onChange={(e) => handleSelectBusiness(e.target.value)}
             className="bg-white text-slate-900 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 shadow-xs focus:outline-none focus:ring-1 focus:ring-[#D4021D] cursor-pointer"
           >
-            {businesses.map((b) => (
+            {(currentUser?.role === 'seller' && sellerOwnedBusinesses.length > 0 ? sellerOwnedBusinesses : businesses).map((b) => (
               <option key={b.id} value={b.id}>
                 {b.logo} {b.name} ({b.category})
               </option>

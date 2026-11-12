@@ -199,7 +199,12 @@ export const INITIAL_DRIVERS: DriverProfile[] = [
     bankPhone: '+58 412 9988776',
     bankIdNumber: 'V-24891302',
     city: 'Caracas',
-    createdAt: '2026-07-01'
+    createdAt: '2026-07-01',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
+    idDocumentPhoto: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80',
+    licensePhoto: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
+    motorcyclePhoto: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=600&auto=format&fit=crop&q=80',
+    vehicleDocPhoto: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80'
   },
   {
     id: 'drv-2',
@@ -222,7 +227,12 @@ export const INITIAL_DRIVERS: DriverProfile[] = [
     bankPhone: '+58 414 5544332',
     bankIdNumber: 'V-22104991',
     city: 'Caracas - Chacao',
-    createdAt: '2026-08-10'
+    createdAt: '2026-08-10',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80',
+    idDocumentPhoto: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80',
+    licensePhoto: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
+    motorcyclePhoto: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=600&auto=format&fit=crop&q=80',
+    vehicleDocPhoto: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80'
   },
   {
     id: 'drv-3',
@@ -245,7 +255,12 @@ export const INITIAL_DRIVERS: DriverProfile[] = [
     bankPhone: '+58 424 7711223',
     bankIdNumber: 'V-26440119',
     city: 'Caracas - La Candelaria',
-    createdAt: '2026-11-05'
+    createdAt: '2026-11-05',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&auto=format&fit=crop&q=80',
+    idDocumentPhoto: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80',
+    licensePhoto: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
+    motorcyclePhoto: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=600&auto=format&fit=crop&q=80',
+    vehicleDocPhoto: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80'
   }
 ];
 
@@ -1326,4 +1341,23 @@ export const INITIAL_FAILED_SEARCHES: FailedSearchRecord[] = [
     notes: 'Resuelto: Stock actualizado en Farmacia San Rafael y Farmacia Roma.'
   }
 ];
+
+export const MOCK_BUSINESS_IDS = new Set([
+  'biz-farmacia-1', 'biz-farmacia-2', 'biz-farmacia-3', 'biz-farmacia-4',
+  'biz-resto-1', 'biz-resto-2', 'biz-resto-3', 'biz-resto-4',
+  'biz-resto-5', 'biz-resto-6', 'biz-resto-7', 'biz-resto-8'
+]);
+
+export const MOCK_PRODUCT_IDS = new Set([
+  'prod-1', 'prod-2', 'prod-3', 'prod-4', 'prod-5', 'prod-6', 'prod-7',
+  'prod-8', 'prod-9', 'prod-10', 'prod-11', 'prod-12', 'prod-13', 'prod-14',
+  'prod-farm-1', 'prod-farm-2', 'prod-farm-3', 'prod-farm-4',
+  'prod-farm-5', 'prod-farm-6', 'prod-farm-7',
+  'prod-resto-1', 'prod-resto-2', 'prod-resto-3', 'prod-resto-4'
+]);
+
+export const MOCK_DRIVER_IDS = new Set([
+  'drv-1', 'drv-2', 'drv-3'
+]);
+
 

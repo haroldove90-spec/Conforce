@@ -18,7 +18,8 @@ import {
   BoostPlan,
   DriverProfile,
   DriverStatus,
-  DriverStep
+  DriverStep,
+  SelectedExtra
 } from '../types';
 import {
   INITIAL_BUSINESSES,
@@ -32,7 +33,10 @@ import {
   INITIAL_CLIENTS,
   INITIAL_FAILED_SEARCHES,
   DATA_VERSION,
-  INITIAL_DRIVERS
+  INITIAL_DRIVERS,
+  MOCK_BUSINESS_IDS,
+  MOCK_PRODUCT_IDS,
+  MOCK_DRIVER_IDS
 } from '../data/mockData';
 import {
   fetchBusinessesFromSupabase,
@@ -306,8 +310,14 @@ interface AppContextType {
     bankPhone?: string;
     bankIdNumber?: string;
     city?: string;
+    avatarUrl?: string;
+    idDocumentPhoto?: string;
+    licensePhoto?: string;
+    motorcyclePhoto?: string;
+    vehicleDocPhoto?: string;
   }) => Promise<{ success: boolean; message: string; driver?: DriverProfile }>;
   updateDriverStatus: (driverId: string, status: DriverStatus) => void;
+  updateDriverProfile: (driverId: string, updates: Partial<DriverProfile>) => Promise<void>;
   toggleDriverAvailability: (driverId?: string) => void;
   acceptOrderAsDriver: (orderId: string, driverId?: string) => void;
   advanceDriverDeliveryStep: (orderId: string, step: DriverStep) => void;
@@ -410,13 +420,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_BUSINESSES;
   });
 
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string>(() => {
-    const isCleared = localStorage.getItem('mk_mock_data_cleared') !== 'false';
+  const [selectedBusinessId, setSelectedBusinessIdState] = useState<string>(() => {
+    const saved = localStorage.getItem('mk_selected_business_id');
+    if (saved) return saved;
+    const isCleared = localStorage.getItem('mk_mock_data_cleared') === 'true';
     if (isCleared) {
-      const saved = localStorage.getItem('mk_businesses');
-      if (saved) {
+      const savedBiz = localStorage.getItem('mk_businesses');
+      if (savedBiz) {
         try {
-          const parsed = JSON.parse(saved);
+          const parsed = JSON.parse(savedBiz);
           if (Array.isArray(parsed) && parsed[0]?.id) return parsed[0].id;
         } catch (e) {}
       }
@@ -424,6 +436,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return INITIAL_BUSINESSES[0]?.id || '';
   });
+
+  const setSelectedBusinessId = (id: string) => {
+    setSelectedBusinessIdState(id);
+    try {
+      localStorage.setItem('mk_selected_business_id', id);
+    } catch (e) {}
+  };
+
   const [selectedBusinessForDetail, setSelectedBusinessForDetail] = useState<Business | null>(null);
 
   // Products State
@@ -616,6 +636,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('mk_current_role', currentRole);
     } catch (e) {}
   }, [currentRole]);
+
+  // Synchronize selectedBusinessId with currentUser's owned business when role is seller
+  useEffect(() => {
+    if (currentUser?.role === 'seller') {
+      const myBiz = businesses.find(
+        (b) =>
+          (b.ownerUsername && b.ownerUsername.toLowerCase() === currentUser.username.toLowerCase()) ||
+          (currentUser.businessId && b.id === currentUser.businessId)
+      );
+      if (myBiz && myBiz.id !== selectedBusinessId) {
+        setSelectedBusinessId(myBiz.id);
+      }
+    }
+  }, [currentUser, businesses, selectedBusinessId]);
 
   // Modals for Auth
   const [isClientAuthModalOpen, setIsClientAuthModalOpen] = useState(false);
@@ -1781,6 +1815,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCart([]);
       setClients([]);
       setEmployees([]);
+      setDrivers([]);
       setFailedSearches([]);
 
       // Keep only admin accounts, guaranteeing admin_master
@@ -1809,6 +1844,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('mk_cart', JSON.stringify([]));
       localStorage.setItem('mk_clients', JSON.stringify([]));
       localStorage.setItem('mk_employees', JSON.stringify([]));
+      localStorage.setItem('mk_drivers', JSON.stringify([]));
       localStorage.setItem('mk_users', JSON.stringify(finalAdmins));
 
       // 3. Delete records from Supabase tables
@@ -1967,36 +2003,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (res.connected && res.hasTables) {
       try {
-        const [remoteBiz, remoteProd, remoteOrders, remoteUsers, remoteClients] = await Promise.all([
+        const [remoteBiz, remoteProd, remoteOrders, remoteUsers, remoteClients, remoteDrivers] = await Promise.all([
           fetchBusinessesFromSupabase(),
           fetchProductsFromSupabase(),
           fetchOrdersFromSupabase(),
           fetchUsersFromSupabase(),
-          fetchClientsFromSupabase()
+          fetchClientsFromSupabase(),
+          fetchDriversFromSupabase()
         ]);
 
         const isCleared = localStorage.getItem('mk_mock_data_cleared') === 'true';
 
         if (remoteBiz) {
-          if (!isCleared || remoteBiz.length > 0) {
-            setBusinesses(remoteBiz);
-          } else if (isCleared && remoteBiz.length === 0) {
-            setBusinesses([]);
-          }
+          const finalBiz = isCleared
+            ? remoteBiz.filter((b) => !MOCK_BUSINESS_IDS.has(b.id))
+            : remoteBiz;
+          setBusinesses(finalBiz);
         }
         if (remoteProd) {
-          if (!isCleared || remoteProd.length > 0) {
-            setProducts(remoteProd);
-          } else if (isCleared && remoteProd.length === 0) {
-            setProducts([]);
-          }
+          const finalProd = isCleared
+            ? remoteProd.filter((p) => !MOCK_PRODUCT_IDS.has(p.id))
+            : remoteProd;
+          setProducts(finalProd);
+        }
+        if (remoteDrivers) {
+          const finalDrivers = isCleared
+            ? remoteDrivers.filter((d) => !MOCK_DRIVER_IDS.has(d.id))
+            : remoteDrivers;
+          setDrivers(finalDrivers);
         }
         if (remoteOrders) {
-          if (!isCleared || remoteOrders.length > 0) {
-            setOrders(remoteOrders);
-          } else if (isCleared && remoteOrders.length === 0) {
-            setOrders([]);
-          }
+          setOrders(remoteOrders);
         }
         if (remoteUsers && remoteUsers.length > 0) {
           setUsers((prev) => {
@@ -2848,7 +2885,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCampaigns(prev => [newCamp, ...prev]);
   };
 
-  const currentSellerBusiness = businesses.find(b => b.id === selectedBusinessId) || businesses[0] || undefined;
+  const currentSellerBusiness = React.useMemo(() => {
+    if (currentUser?.role === 'seller') {
+      const byOwner = businesses.find(
+        b => (b.ownerUsername && b.ownerUsername.toLowerCase() === currentUser.username.toLowerCase()) ||
+             (currentUser.businessId && b.id === currentUser.businessId)
+      );
+      if (byOwner) return byOwner;
+    }
+    if (selectedBusinessId) {
+      const bySelected = businesses.find(b => b.id === selectedBusinessId);
+      if (bySelected) return bySelected;
+    }
+    return businesses[0] || undefined;
+  }, [currentUser, businesses, selectedBusinessId]);
 
   const currentDriverProfile = React.useMemo(() => {
     if (currentUser?.role === 'driver') {
@@ -2876,6 +2926,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bankPhone?: string;
     bankIdNumber?: string;
     city?: string;
+    avatarUrl?: string;
+    idDocumentPhoto?: string;
+    licensePhoto?: string;
+    motorcyclePhoto?: string;
+    vehicleDocPhoto?: string;
   }): Promise<{ success: boolean; message: string; driver?: DriverProfile }> => {
     const cleanUsername = data.username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
     if (!cleanUsername) return { success: false, message: 'El nombre de usuario no es válido.' };
@@ -2911,7 +2966,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bankPhone: data.bankPhone?.trim() || data.phone.trim(),
       bankIdNumber: data.bankIdNumber?.trim() || data.ciDni.trim(),
       city: data.city?.trim() || 'Caracas',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      avatarUrl: data.avatarUrl,
+      idDocumentPhoto: data.idDocumentPhoto,
+      licensePhoto: data.licensePhoto,
+      motorcyclePhoto: data.motorcyclePhoto,
+      vehicleDocPhoto: data.vehicleDocPhoto
     };
 
     const newUser: UserAccount = {
@@ -2941,9 +3001,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return {
       success: true,
-      message: '¡Registro exitoso! Tu perfil de mensajero en moto está en revisión y será activado en breve.',
+      message: '¡Registro exitoso! Tu perfil y documentos de mensajero en moto han sido cargados y enviados a revisión.',
       driver: newDriver
     };
+  };
+
+  const updateDriverProfile = async (driverId: string, updates: Partial<DriverProfile>) => {
+    setDrivers(prev => {
+      const updatedList = prev.map(d => (d.id === driverId ? { ...d, ...updates } : d));
+      try {
+        localStorage.setItem('mk_drivers', JSON.stringify(updatedList));
+      } catch (e) {}
+      const target = updatedList.find(d => d.id === driverId);
+      if (target) {
+        upsertDriverInSupabase(target);
+      }
+      return updatedList;
+    });
   };
 
   const updateDriverStatus = (driverId: string, status: DriverStatus) => {
@@ -2992,6 +3066,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openDriverRegistration,
         registerDriver,
         updateDriverStatus,
+        updateDriverProfile,
         toggleDriverAvailability,
         acceptOrderAsDriver,
         advanceDriverDeliveryStep,
