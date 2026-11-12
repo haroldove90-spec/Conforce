@@ -4,7 +4,8 @@ import {
   SUPABASE_PROJECT_INFO,
   SUPABASE_SQL_SCHEMA,
   SUPABASE_SPONSOR_UNLOCK_SQL,
-  SUPABASE_PURGE_SAMPLE_DATA_SQL
+  SUPABASE_PURGE_SAMPLE_DATA_SQL,
+  SUPABASE_VENEZUELA_AND_PRODUCTS_SQL
 } from '../../data/supabaseSql';
 import {
   Database,
@@ -41,7 +42,7 @@ export const SupabaseAdminView: React.FC = () => {
   } = useApp();
 
   const [copiedSql, setCopiedSql] = useState(false);
-  const [selectedSqlTab, setSelectedSqlTab] = useState<'purge' | 'sponsor' | 'full'>('purge');
+  const [selectedSqlTab, setSelectedSqlTab] = useState<'purge' | 'sponsor' | 'venezuela' | 'full'>('venezuela');
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -53,6 +54,8 @@ export const SupabaseAdminView: React.FC = () => {
       ? SUPABASE_PURGE_SAMPLE_DATA_SQL
       : selectedSqlTab === 'sponsor'
       ? SUPABASE_SPONSOR_UNLOCK_SQL
+      : selectedSqlTab === 'venezuela'
+      ? SUPABASE_VENEZUELA_AND_PRODUCTS_SQL
       : SUPABASE_SQL_SCHEMA;
 
   const handleCopySql = () => {
@@ -352,7 +355,9 @@ export const SupabaseAdminView: React.FC = () => {
             <div className="flex items-center gap-2 mb-1">
               <FileCode className="w-4 h-4 text-[#D4021D]" />
               <h3 className="font-bold text-sm text-slate-900">
-                {selectedSqlTab === 'purge'
+                {selectedSqlTab === 'venezuela'
+                  ? '🇻🇪 Actualización Venezuela: Moneda Dual (Bs./USD), Variantes & Alimentos'
+                  : selectedSqlTab === 'purge'
                   ? '🧹 Script SQL: Limpiar Registros de Muestra (Supabase Limpio para Producción)'
                   : selectedSqlTab === 'sponsor'
                   ? '⭐ Desbloqueo Rápido: Soporte de Patrocinadores y Marcas'
@@ -360,7 +365,9 @@ export const SupabaseAdminView: React.FC = () => {
               </h3>
             </div>
             <p className="text-xs text-slate-500">
-              {selectedSqlTab === 'purge'
+              {selectedSqlTab === 'venezuela'
+                ? 'Agrega las columnas price_usd, images, variants, ingredients, extras, preparation_time y food_tags a la tabla products en Supabase sin borrar datos existentes.'
+                : selectedSqlTab === 'purge'
                 ? 'Borra todos los comercios, productos, pedidos, clientes y usuarios de prueba en Supabase, preservando de forma segura las tablas y la cuenta admin_master.'
                 : selectedSqlTab === 'sponsor'
                 ? 'Ejecuta este script para remover restricciones de categoría y habilitar las columnas is_sponsor, RIF y email en Supabase.'
@@ -377,6 +384,8 @@ export const SupabaseAdminView: React.FC = () => {
               <span>
                 {copiedSql
                   ? '¡SQL Copiado!'
+                  : selectedSqlTab === 'venezuela'
+                  ? 'Copiar Script Venezuela & Productos'
                   : selectedSqlTab === 'purge'
                   ? 'Copiar Script Limpieza'
                   : selectedSqlTab === 'sponsor'
@@ -399,6 +408,17 @@ export const SupabaseAdminView: React.FC = () => {
 
         {/* Tab selection for SQL */}
         <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl w-fit flex-wrap">
+          <button
+            type="button"
+            onClick={() => setSelectedSqlTab('venezuela')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              selectedSqlTab === 'venezuela'
+                ? 'bg-[#D4021D] text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            🇻🇪 Venezuela & Variantes (Nuevo)
+          </button>
           <button
             type="button"
             onClick={() => setSelectedSqlTab('purge')}

@@ -206,6 +206,32 @@ ON CONFLICT (id) DO UPDATE SET
     is_available = EXCLUDED.is_available;
 `;
 
+export const SUPABASE_VENEZUELA_AND_PRODUCTS_SQL = `-- ==============================================================================
+-- 🇻🇪 CONFORCE - ACTUALIZACIÓN VENEZUELA: DUAL CURRENCY (Bs. & USD) + PRODUCTOS VARIABLES + ALIMENTOS/EXTRAS
+-- Copia y corre esto en el SQL Editor de Supabase:
+-- https://supabase.com/dashboard/project/cjoszqkgqtgfvzqxcsvi/sql/new
+-- ==============================================================================
+
+-- 1. Agregar columnas en 'products' para moneda dual (USD), variantes, fotos múltiples y alimentos
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_usd NUMERIC(12, 2) DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS ingredients JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS extras JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS preparation_time TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS food_tags JSONB DEFAULT '[]'::JSONB;
+
+-- 2. Asegurar columnas de ciudad y coordenadas venezolanas en comercios
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Caracas';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS state TEXT DEFAULT 'Distrito Capital';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS rif TEXT;
+
+-- 3. Índices de optimización
+CREATE INDEX IF NOT EXISTS idx_products_price_usd ON public.products(price_usd);
+`;
+
+
 export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
 -- CON FORCE MARKETPLACE - ESQUEMA COMPLETO Y DATOS INICIALES PARA SUPABASE
 -- Proyecto: marketplace@force-express.com's Project
@@ -268,20 +294,36 @@ CREATE TABLE IF NOT EXISTS public.products (
     business_id TEXT NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
-    price NUMERIC(10, 2) NOT NULL,
-    original_price NUMERIC(10, 2),
+    price NUMERIC(12, 2) NOT NULL,
+    price_usd NUMERIC(12, 2) DEFAULT 0,
+    original_price NUMERIC(12, 2),
     category TEXT NOT NULL DEFAULT 'General',
     image TEXT NOT NULL DEFAULT '',
+    images JSONB DEFAULT '[]'::JSONB,
     in_stock BOOLEAN NOT NULL DEFAULT true,
     stock_count INTEGER NOT NULL DEFAULT 100,
     tags TEXT[] NOT NULL DEFAULT '{}',
     is_offer_of_the_day BOOLEAN NOT NULL DEFAULT false,
     is_boosted BOOLEAN NOT NULL DEFAULT false,
+    has_variants BOOLEAN DEFAULT false,
+    variants JSONB DEFAULT '[]'::JSONB,
+    ingredients JSONB DEFAULT '[]'::JSONB,
+    extras JSONB DEFAULT '[]'::JSONB,
+    preparation_time TEXT,
+    food_tags JSONB DEFAULT '[]'::JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_usd NUMERIC(12, 2) DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::JSONB;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_boosted BOOLEAN DEFAULT false;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_offer_of_the_day BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS ingredients JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS extras JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS preparation_time TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS food_tags JSONB DEFAULT '[]'::JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_products_business_id ON public.products(business_id);
 CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);

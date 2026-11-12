@@ -46,15 +46,38 @@ export interface Business {
   state?: string;
 }
 
+export interface ProductVariantOption {
+  id: string;
+  label: string; // e.g. "Pequeña", "Mediana", "Grande", "Talla S", "Talla M"
+  priceDelta: number; // in Bs. (+0, +50, etc.)
+  priceDeltaUsd?: number; // in USD
+  inStock?: boolean;
+}
+
+export interface ProductVariant {
+  id: string;
+  name: string; // e.g. "Tamaño / Porción", "Talla", "Color", "Presentación"
+  options: ProductVariantOption[];
+}
+
+export interface ProductExtra {
+  id: string;
+  name: string; // e.g. "Queso Cheddar Fundido", "Tocineta Crocante", "Salsa Especial"
+  price: number; // in Bs.
+  priceUsd?: number; // in USD
+}
+
 export interface Product {
   id: string;
   businessId: string;
   name: string;
   description: string;
-  price: number;
+  price: number; // in Bs.
+  priceUsd?: number; // in USD ($)
   originalPrice?: number;
   category: string;
-  image: string;
+  image: string; // primary image (base64 or URL)
+  images?: string[]; // additional photo gallery from device
   inStock: boolean;
   stockCount: number;
   tags: string[]; // for Chatbot search: e.g. ['paracetamol', 'analgesico', 'fiebre']
@@ -62,34 +85,32 @@ export interface Product {
   isBoosted?: boolean;
   boostTier?: 'basic' | 'pro' | 'premium';
   boostExpiresAt?: string;
+
+  // Restaurant & food specific attributes
+  ingredients?: string[]; // e.g. ["Carne 150g", "Queso cheddar", "Tocineta"]
+  extras?: ProductExtra[]; // e.g. customizable additions
+  preparationTime?: string; // e.g. "15-20 min"
+  foodTags?: string[]; // e.g. ["picante", "vegetariano", "sin_gluten"]
+
+  // Variable product attributes
+  hasVariants?: boolean;
+  variants?: ProductVariant[];
 }
 
-export interface BoostPlan {
-  id: 'boost_3d' | 'boost_7d' | 'boost_15d';
-  name: string;
-  days: number;
-  price: number;
-  impressionsEstimate: string;
-  badgeText: string;
-  recommended?: boolean;
-}
-
-export interface FailedSearchRecord {
+export interface SelectedExtra {
   id: string;
-  term: string;
-  categoryGuess: string;
-  count: number;
-  firstSearchedAt: string;
-  lastSearchedAt: string;
-  status: 'pending' | 'evaluating' | 'added' | 'dismissed';
-  userLocationHint?: string;
-  notes?: string;
+  name: string;
+  price: number;
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
   businessId: string;
+  selectedVariantOption?: { variantName: string; optionLabel: string; priceDelta: number };
+  selectedExtras?: SelectedExtra[];
+  kitchenNotes?: string; // e.g. "Sin cebolla, salsa tártara aparte"
+  itemTotalBs?: number; // total price per unit including variant & extras
 }
 
 export type OrderStatus = 'preparing' | 'ready' | 'on_the_way' | 'delivered' | 'cancelled';

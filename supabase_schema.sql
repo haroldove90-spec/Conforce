@@ -127,9 +127,11 @@ CREATE TABLE IF NOT EXISTS public.products (
     name TEXT NOT NULL,
     description TEXT,
     price NUMERIC(12,2) NOT NULL DEFAULT 0,
+    price_usd NUMERIC(12,2) DEFAULT 0,
     original_price NUMERIC(12,2),
     category TEXT DEFAULT 'General',
     image TEXT,
+    images JSONB DEFAULT '[]'::JSONB,
     in_stock BOOLEAN DEFAULT true,
     stock_count INTEGER DEFAULT 10,
     tags JSONB DEFAULT '[]'::JSONB,
@@ -137,6 +139,12 @@ CREATE TABLE IF NOT EXISTS public.products (
     is_boosted BOOLEAN DEFAULT false,
     boost_tier TEXT,
     boost_expires_at TIMESTAMPTZ,
+    has_variants BOOLEAN DEFAULT false,
+    variants JSONB DEFAULT '[]'::JSONB,
+    ingredients JSONB DEFAULT '[]'::JSONB,
+    extras JSONB DEFAULT '[]'::JSONB,
+    preparation_time TEXT,
+    food_tags JSONB DEFAULT '[]'::JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -145,9 +153,11 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS business_id TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_usd NUMERIC(12,2) DEFAULT 0;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS original_price NUMERIC(12,2);
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General';
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS image TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::JSONB;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS in_stock BOOLEAN DEFAULT true;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS stock_count INTEGER DEFAULT 10;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::JSONB;
@@ -155,6 +165,12 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_offer_of_the_day BOOLEAN
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_boosted BOOLEAN DEFAULT false;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS boost_tier TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS boost_expires_at TIMESTAMPTZ;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS ingredients JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS extras JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS preparation_time TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS food_tags JSONB DEFAULT '[]'::JSONB;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 

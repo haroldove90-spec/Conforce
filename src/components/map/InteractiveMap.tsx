@@ -43,9 +43,21 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [mapLayer, setMapLayer] = useState<'dark' | 'satellite' | 'streets'>('streets');
   const [showCoverageRadius, setShowCoverageRadius] = useState<boolean>(true);
 
-  // Center coordinate reference
-  const centerLat = userLocation?.lat || 19.4120;
-  const centerLng = userLocation?.lng || -99.1650;
+  // Venezuelan Cities
+  const VENEZUELAN_CITIES = [
+    { name: 'Caracas (Distrito Capital)', lat: 10.4806, lng: -66.9036 },
+    { name: 'Valencia (Carabobo)', lat: 10.1620, lng: -68.0077 },
+    { name: 'Maracaibo (Zulia)', lat: 10.6545, lng: -71.6426 },
+    { name: 'Barquisimeto (Lara)', lat: 10.0647, lng: -69.3570 },
+    { name: 'Maracay (Aragua)', lat: 10.2469, lng: -67.5958 },
+    { name: 'Lechería / PLC (Anzoátegui)', lat: 10.1983, lng: -64.6931 }
+  ];
+
+  const [selectedCity, setSelectedCity] = useState(VENEZUELAN_CITIES[0]);
+
+  // Center coordinate reference: Venezuela GPS or Selected Venezuelan City
+  const centerLat = userLocation?.lat || selectedCity.lat;
+  const centerLng = userLocation?.lng || selectedCity.lng;
 
   // Filter businesses according to prop
   const filteredBusinesses = businesses.filter((biz) => {
@@ -109,33 +121,52 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         )}
       </div>
 
-      {/* Top Map Layer Controls */}
-      <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-20 pointer-events-auto">
-        <div className="flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md">
-          <button
-            onClick={() => setMapLayer('streets')}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-              mapLayer === 'streets' ? 'bg-[#D4021D] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Calles
-          </button>
-          <button
-            onClick={() => setMapLayer('dark')}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-              mapLayer === 'dark' ? 'bg-[#D4021D] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Noche
-          </button>
-          <button
-            onClick={() => setMapLayer('satellite')}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-              mapLayer === 'satellite' ? 'bg-[#D4021D] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Satélite
-          </button>
+      {/* Top Map Layer Controls & Venezuelan City Selector */}
+      <div className="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 z-20 pointer-events-auto">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* City selector dropdown for Venezuela */}
+          <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-200 shadow-md text-xs font-bold text-slate-800">
+            <span className="text-sm">🇻🇪</span>
+            <select
+              value={selectedCity.name}
+              onChange={(e) => {
+                const found = VENEZUELAN_CITIES.find(c => c.name === e.target.value);
+                if (found) setSelectedCity(found);
+              }}
+              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer text-xs"
+            >
+              {VENEZUELAN_CITIES.map(c => (
+                <option key={c.name} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md">
+            <button
+              onClick={() => setMapLayer('streets')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                mapLayer === 'streets' ? 'bg-[#D4021D] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Calles
+            </button>
+            <button
+              onClick={() => setMapLayer('dark')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                mapLayer === 'dark' ? 'bg-[#D4021D] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Noche
+            </button>
+            <button
+              onClick={() => setMapLayer('satellite')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                mapLayer === 'satellite' ? 'bg-[#D4021D] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Satélite
+            </button>
+          </div>
         </div>
 
         <button

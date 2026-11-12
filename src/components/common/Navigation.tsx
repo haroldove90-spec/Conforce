@@ -349,23 +349,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
           </button>
         )}
 
-        {/* Corporate Portal Access (For Admins & Businesses) */}
-        {currentRole === 'client' && (
-          <button
-            onClick={() => {
-              setIsCorporateAuthModalOpen(true);
-              if (isDrawer) setIsMobileMenuOpen(false);
-            }}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-zinc-100 hover:text-zinc-950 transition-all cursor-pointer shadow-2xs"
-            title="Acceso para Administradores y Comercios"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <KeyRound className="w-4 h-4 text-[#D4021D] shrink-0" />
-              <span className="truncate">Admin / Negocios</span>
-            </div>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          </button>
-        )}
+
       </div>
 
       {/* 5. Bottom: Active User Session & Cerrar Sesión Button */}

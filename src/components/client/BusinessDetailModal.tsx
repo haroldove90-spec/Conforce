@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Business, Product } from '../../types';
+import { Business, Product, ProductVariantOption, SelectedExtra } from '../../types';
 import { getBusinessScheduleStatus } from '../../utils/scheduleUtils';
 import {
   X,
@@ -18,7 +18,12 @@ import {
   ShoppingBag,
   Share2,
   Truck,
-  Store
+  Store,
+  Utensils,
+  Layers,
+  ChefHat,
+  Camera,
+  DollarSign
 } from 'lucide-react';
 
 interface BusinessDetailModalProps {
@@ -38,11 +43,39 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
     cart,
     calculateDistance,
     openExternalNavigation,
-    openWhatsAppWithPrompt
+    openWhatsAppWithPrompt,
+    exchangeRateUsd,
+    formatCurrency
   } = useApp();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Customization drawer state
+  const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
+  const [selectedVariantOpt, setSelectedVariantOpt] = useState<ProductVariantOption | null>(null);
+  const [selectedExtras, setSelectedExtras] = useState<SelectedExtra[]>([]);
+  const [kitchenNotes, setKitchenNotes] = useState<string>('');
+  const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+
+  const openCustomizeModal = (prod: Product) => {
+    setCustomizingProduct(prod);
+    // default to first variant option if any
+    if (prod.hasVariants && prod.variants?.[0]?.options?.length) {
+      setSelectedVariantOpt(prod.variants[0].options[0]);
+    } else {
+      setSelectedVariantOpt(null);
+    }
+    setSelectedExtras([]);
+    setKitchenNotes('');
+    setActivePhotoIdx(0);
+  };
+
+  const calculateCustomizedPrice = (prod: Product) => {
+    const variantDelta = selectedVariantOpt?.priceDelta || 0;
+    const extrasSum = selectedExtras.reduce((s, e) => s + e.price, 0);
+    return prod.price + variantDelta + extrasSum;
+  };
 
   const bizProducts = products.filter((p) => p.businessId === business.id);
 
@@ -246,43 +279,59 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
 
                       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                         <div>
-                          <span className="font-extrabold text-slate-900 text-sm">
-                            Bs. {prod.price}
-                          </span>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-extrabold text-slate-900 text-sm">
+                              Bs. {prod.price}
+                            </span>
+                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded border border-emerald-100">
+                              ${(exchangeRateUsd > 0 ? (prod.price / exchangeRateUsd).toFixed(2) : '0')} USD
+                            </span>
+                          </div>
                           {prod.originalPrice && (
-                            <span className="text-[10px] text-slate-400 line-through ml-1.5">
+                            <span className="text-[10px] text-slate-400 line-through">
                               Bs. {prod.originalPrice}
                             </span>
                           )}
                         </div>
 
-                        {/* Cart Controls */}
-                        {qty > 0 ? (
-                          <div className="flex items-center gap-2 bg-[#D4021D] text-white px-2 py-1 rounded-xl shadow-xs">
-                            <button
-                              onClick={() => addToCart(prod, -1)}
-                              className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="text-xs font-bold min-w-[14px] text-center">
-                              {qty}
-                            </span>
+                        {/* If product has variants, ingredients or extras, open customizer modal */}
+                        {(prod.hasVariants || (prod.extras && prod.extras.length > 0) || (prod.ingredients && prod.ingredients.length > 0)) ? (
+                          <button
+                            onClick={() => openCustomizeModal(prod)}
+                            className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
+                          >
+                            <Utensils className="w-3 h-3" />
+                            <span>Personalizar</span>
+                          </button>
+                        ) : (
+                          /* Cart Controls for simple products */
+                          qty > 0 ? (
+                            <div className="flex items-center gap-2 bg-[#D4021D] text-white px-2 py-1 rounded-xl shadow-xs">
+                              <button
+                                onClick={() => addToCart(prod, -1)}
+                                className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="text-xs font-bold min-w-[14px] text-center">
+                                {qty}
+                              </span>
+                              <button
+                                onClick={() => addToCart(prod, 1)}
+                                className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               onClick={() => addToCart(prod, 1)}
-                              className="p-0.5 hover:opacity-80 active:scale-95 cursor-pointer"
+                              className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-3 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
+                              <span>Agregar</span>
                             </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => addToCart(prod, 1)}
-                            className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-3 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Agregar</span>
-                          </button>
+                          )
                         )}
                       </div>
                     </div>
@@ -299,7 +348,10 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
             <div>
               <span className="text-xs text-slate-600 font-medium">Total en Carrito:</span>
               <p className="font-black text-slate-900 text-base">
-                Bs. {cart.reduce((s, i) => s + i.product.price * i.quantity, 0)}
+                Bs. {cart.reduce((s, i) => s + (i.itemTotalBs ?? i.product.price) * i.quantity, 0)}{' '}
+                <span className="text-xs text-emerald-600 font-bold">
+                  (${exchangeRateUsd > 0 ? (cart.reduce((s, i) => s + (i.itemTotalBs ?? i.product.price) * i.quantity, 0) / exchangeRateUsd).toFixed(2) : '0'} USD)
+                </span>
               </p>
             </div>
             <button
@@ -316,6 +368,249 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
         )}
 
       </div>
+
+      {/* CUSTOMIZE PRODUCT MODAL (Variants, Ingredients, Extras & Kitchen Notes) */}
+      {customizingProduct && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-red-100 text-[#D4021D] flex items-center justify-center font-bold">
+                  <Utensils className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 leading-tight">
+                    {customizingProduct.name}
+                  </h3>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Personaliza tu pedido a tu gusto
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCustomizingProduct(null)}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+              {/* Product Photos Carousel / Preview */}
+              {(() => {
+                const photos = [customizingProduct.image, ...(customizingProduct.images || [])].filter(Boolean);
+                const currentPhoto = photos[activePhotoIdx] || photos[0];
+                return (
+                  <div className="space-y-2">
+                    <div className="relative h-44 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
+                      <img src={currentPhoto} alt={customizingProduct.name} className="w-full h-full object-cover" />
+                      {customizingProduct.isOfferOfTheDay && (
+                        <span className="absolute top-2 left-2 px-2 py-0.5 bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg uppercase shadow-xs flex items-center gap-1">
+                          <Flame className="w-3 h-3 fill-slate-950" /> Oferta del Día
+                        </span>
+                      )}
+                    </div>
+                    {photos.length > 1 && (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                        {photos.map((p, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setActivePhotoIdx(idx)}
+                            className={`w-12 h-12 rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                              activePhotoIdx === idx ? 'border-[#D4021D] scale-105' : 'border-slate-200 opacity-70'
+                            }`}
+                          >
+                            <img src={p} alt={`Foto ${idx}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Description & Badges */}
+              <div className="space-y-1.5">
+                <p className="text-slate-600 text-xs leading-relaxed">
+                  {customizingProduct.description}
+                </p>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {customizingProduct.preparationTime && (
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded-lg border border-slate-200 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-[#D4021D]" />
+                      Prep: {customizingProduct.preparationTime}
+                    </span>
+                  )}
+                  {customizingProduct.foodTags?.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-2 py-0.5 bg-amber-50 text-amber-900 font-bold text-[10px] rounded-lg border border-amber-200"
+                    >
+                      {tag === 'picante' ? '🌶️ Picante' : tag === 'vegetariano' ? '🌱 Vegetariano' : tag === 'sin_gluten' ? '🌾 Sin Gluten' : tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Ingredientes de la Receta */}
+              {customizingProduct.ingredients && customizingProduct.ingredients.length > 0 && (
+                <div className="p-3 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-1.5">
+                  <span className="text-[10px] font-black uppercase text-amber-900 flex items-center gap-1">
+                    <ChefHat className="w-3.5 h-3.5 text-amber-700" />
+                    Ingredientes del Platillo:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {customizingProduct.ingredients.map((ing, idx) => (
+                      <span key={idx} className="bg-white text-slate-700 px-2 py-0.5 rounded-lg border border-amber-200/80 font-medium text-[11px]">
+                        • {ing}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Selector de Variantes (Tamaños, Tallas, Presentaciones) */}
+              {customizingProduct.hasVariants && customizingProduct.variants?.[0]?.options && (
+                <div className="space-y-2">
+                  <label className="text-slate-700 text-xs font-black uppercase flex items-center justify-between">
+                    <span>Selecciona {customizingProduct.variants[0].name || 'Opción'}:</span>
+                    <span className="text-red-600 text-[10px] font-bold">* Requerido</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {customizingProduct.variants[0].options.map((opt) => {
+                      const isSelected = selectedVariantOpt?.id === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setSelectedVariantOpt(opt)}
+                          className={`p-2.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-red-50 border-[#D4021D] ring-2 ring-red-500/30'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-extrabold text-slate-900 text-xs block">{opt.label}</span>
+                            <span className={`text-[10px] font-bold ${opt.priceDelta >= 0 ? 'text-[#D4021D]' : 'text-blue-600'}`}>
+                              {opt.priceDelta >= 0 ? `+Bs. ${opt.priceDelta}` : `-Bs. ${Math.abs(opt.priceDelta)}`}
+                              {exchangeRateUsd > 0 && ` (${opt.priceDelta >= 0 ? '+' : '-'}$${(Math.abs(opt.priceDelta) / exchangeRateUsd).toFixed(2)} USD)`}
+                            </span>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-[#D4021D] bg-[#D4021D]' : 'border-slate-300'}`}>
+                            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Adicionales y Extras Personalizables */}
+              {customizingProduct.extras && customizingProduct.extras.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-slate-700 text-xs font-black uppercase flex items-center justify-between">
+                    <span>Extras y Adicionales Disponibles:</span>
+                    <span className="text-slate-400 text-[10px]">Opcional</span>
+                  </label>
+                  <div className="space-y-1.5">
+                    {customizingProduct.extras.map((extra) => {
+                      const isChecked = selectedExtras.some(e => e.id === extra.id);
+                      return (
+                        <div
+                          key={extra.id}
+                          onClick={() => {
+                            setSelectedExtras(prev =>
+                              isChecked
+                                ? prev.filter(e => e.id !== extra.id)
+                                : [...prev, { id: extra.id, name: extra.name, price: extra.price }]
+                            );
+                          }}
+                          className={`p-2.5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                            isChecked
+                              ? 'bg-red-50/50 border-[#D4021D]'
+                              : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}}
+                              className="w-4 h-4 accent-[#D4021D] pointer-events-none"
+                            />
+                            <span className="font-semibold text-slate-800 text-xs">{extra.name}</span>
+                          </div>
+                          <span className="font-black text-[#D4021D] text-xs">
+                            +Bs. {extra.price}{' '}
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              (${exchangeRateUsd > 0 ? (extra.price / exchangeRateUsd).toFixed(2) : '0'} USD)
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Notas de Cocina para el Restaurante / Comercio */}
+              <div className="space-y-1">
+                <label className="text-slate-700 text-[10px] uppercase font-bold">
+                  Instrucciones Especiales para el Chef / Despacho:
+                </label>
+                <input
+                  type="text"
+                  value={kitchenNotes}
+                  onChange={(e) => setKitchenNotes(e.target.value)}
+                  placeholder="Ej: Sin cebolla, salsa tártara aparte, carne bien cocida..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-xs focus:outline-none focus:border-[#D4021D]"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer with Calculated Total */}
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+              <div>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Precio Final del Artículo</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-black text-slate-900">
+                    Bs. {calculateCustomizedPrice(customizingProduct)}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-1 rounded border border-emerald-100">
+                    ${(exchangeRateUsd > 0 ? (calculateCustomizedPrice(customizingProduct) / exchangeRateUsd).toFixed(2) : '0')} USD
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  addToCart(customizingProduct, 1, {
+                    selectedVariantOption: selectedVariantOpt ? {
+                      variantName: customizingProduct.variants?.[0]?.name || 'Variante',
+                      optionLabel: selectedVariantOpt.label,
+                      priceDelta: selectedVariantOpt.priceDelta
+                    } : undefined,
+                    selectedExtras: selectedExtras.length > 0 ? selectedExtras : undefined,
+                    kitchenNotes: kitchenNotes.trim() || undefined
+                  });
+                  setCustomizingProduct(null);
+                }}
+                className="flex items-center gap-1.5 bg-[#D4021D] hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer text-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Agregar al Pedido</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

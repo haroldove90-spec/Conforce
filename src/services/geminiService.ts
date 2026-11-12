@@ -1,12 +1,22 @@
 import { Business, Product, BusinessCategory } from '../types';
 import { buildDeepLink } from '../utils/urlUtils';
 
+export type AssistantActionType =
+  | 'open_business_register'
+  | 'open_driver_register'
+  | 'open_client_auth'
+  | 'view_cart'
+  | 'view_map'
+  | 'view_catalog'
+  | 'none';
+
 export interface ChatbotResponse {
   messageText: string;
   foundProducts: Product[];
   recommendedBusinesses: Business[];
   deepLink?: string;
   categoryDetected?: BusinessCategory;
+  actionType?: AssistantActionType;
 }
 
 type ProductsDirectory = Product[];
@@ -83,7 +93,8 @@ export async function processChatbotMessage(
           foundProducts: matchedProducts,
           recommendedBusinesses: matchedBusinesses.length > 0 ? matchedBusinesses : (primaryBiz ? [primaryBiz] : []),
           deepLink,
-          categoryDetected: data.category as BusinessCategory
+          categoryDetected: data.category as BusinessCategory,
+          actionType: (data.actionType as AssistantActionType) || 'none'
         };
       }
     }
@@ -107,6 +118,108 @@ function fallbackIntelligentMatcher(
   _userLocation: { lat: number; lng: number } | null
 ): ChatbotResponse {
   const cleanQuery = query.replace(/[.,/#!$%^&*;:{}=\-_`~()¿?¡!]/g, '').trim().toLowerCase();
+
+  // 1. Motorcycle Couriers / Mensajeros en Moto
+  if (
+    cleanQuery.includes('moto') ||
+    cleanQuery.includes('mensajero') ||
+    cleanQuery.includes('repartidor') ||
+    cleanQuery.includes('motorizado') ||
+    cleanQuery.includes('delivery') ||
+    cleanQuery.includes('carrera') ||
+    cleanQuery.includes('chofer') ||
+    cleanQuery.includes('conducir')
+  ) {
+    return {
+      messageText: `🛵 *¡Únete a la Flota de Mensajeros en Moto de ConForce Venezuela!*\n\nGenera ingresos diarios entregando pedidos de comercios y restaurantes aliados en tu ciudad.\n\n📋 *Requisitos para registrarte:*\n• Motocicleta propia en buen estado con casco (ej. Bera SBR 150, Empire Keeway Horse, Suzuki GN 125, etc.).\n• Cédula de Identidad (V/E) y Licencia de conducir vigente.\n• Placa visible del vehículo.\n• Teléfono inteligente con GPS y cuenta bancaria para cobrar por Pago Móvil en Bolívares (Bs.).\n\n✨ *Beneficios:*\n• Pagos directos por cada carrera completada.\n• Panel táctil para mensajeros con navegación integrada en Google Maps y Waze.\n• Horarios flexibles y soporte continuo.\n\n👉 Haz clic en el botón abajo para abrir el formulario de registro de mensajeros en moto:`,
+      foundProducts: [],
+      recommendedBusinesses: businesses.slice(0, 2),
+      deepLink: buildDeepLink(),
+      actionType: 'open_driver_register'
+    };
+  }
+
+  // 2. Business / Store Registration
+  if (
+    cleanQuery.includes('negocio') ||
+    cleanQuery.includes('comercio') ||
+    cleanQuery.includes('afiliar') ||
+    cleanQuery.includes('vender') ||
+    cleanQuery.includes('tienda') ||
+    cleanQuery.includes('publicar') ||
+    cleanQuery.includes('abrir tienda') ||
+    cleanQuery.includes('registrar mi negocio')
+  ) {
+    return {
+      messageText: `🏪 *¡Registra tu Comercio en ConForce Marketplace!*\n\n¡La publicación de catálogos y productos es **100% GRATUITA** para todos los comercios y emprendedores en Venezuela!\n\n📋 *Requisitos de afiliación:*\n• Nombre comercial y categoría de tu tienda (Tecnología, Restaurante, Farmacia, Repuestos, Víveres, etc.).\n• Documento de identidad o RIF.\n• Número de WhatsApp comercial para recibir pedidos al instante.\n• Dirección física para despacho o retiro en tienda.\n\n✨ *Ventajas para tu negocio:*\n• Panel en vivo para gestionar productos, fotos y precios en Bolívares (Bs.).\n• Integración directa con mensajeros en moto para delivery express.\n• Opciones de Ads y Boost para posicionar tus productos como "Ofertas del Día".\n\n👉 Haz clic abajo para completar tu registro de negocio de inmediato:`,
+      foundProducts: [],
+      recommendedBusinesses: businesses.slice(0, 2),
+      deepLink: buildDeepLink(),
+      actionType: 'open_business_register'
+    };
+  }
+
+  // 3. Buying guide, payments & fees
+  if (
+    cleanQuery.includes('como comprar') ||
+    cleanQuery.includes('cómo comprar') ||
+    cleanQuery.includes('como pedir') ||
+    cleanQuery.includes('cómo pedir') ||
+    cleanQuery.includes('como funciona') ||
+    cleanQuery.includes('pago movil') ||
+    cleanQuery.includes('pago móvil') ||
+    cleanQuery.includes('metodo de pago') ||
+    cleanQuery.includes('metodos de pago') ||
+    cleanQuery.includes('tarifa') ||
+    cleanQuery.includes('costo de envio') ||
+    cleanQuery.includes('costo de envío') ||
+    cleanQuery.includes('comision') ||
+    cleanQuery.includes('comisión')
+  ) {
+    return {
+      messageText: `🛍️ *Guía Oficial de Compra en ConForce Venezuela:*\n\nComprar en nuestro Marketplace es rápido, transparente y seguro:\n\n1️⃣ **Explora:** Busca productos en el catálogo o en el mapa interactivo por cercanía.\n2️⃣ **Agrega al Carrito:** Selecciona tus artículos con precios actualizados en Bolívares (Bs.).\n3️⃣ **Elige tu Entrega:**\n   • 🛵 **Delivery en Moto:** Tarifa plana de **Bs. 35** (entregas en < 45 min).\n   • 🏬 **Retiro en Tienda:** Totalmente Gratis.\n4️⃣ **Pago Seguro:** Paga cómodamente mediante **Pago Móvil** o transferencia bancaria e ingresa tu número de referencia.\n5️⃣ **Rastreo en Vivo:** Conoce el estado de tu pedido y visualiza al mensajero asignado en camino.\n\n*(Tarifa de servicio: 5% del subtotal para soporte prioritario y seguro de entrega).*`,
+      foundProducts: [],
+      recommendedBusinesses: businesses.slice(0, 2),
+      deepLink: buildDeepLink(),
+      actionType: 'view_cart'
+    };
+  }
+
+  // 4. Client Account / Login / Register
+  if (
+    cleanQuery.includes('iniciar sesion') ||
+    cleanQuery.includes('iniciar sesión') ||
+    cleanQuery.includes('crear cuenta') ||
+    cleanQuery.includes('registrarse') ||
+    cleanQuery.includes('mi cuenta') ||
+    cleanQuery.includes('login')
+  ) {
+    return {
+      messageText: `👤 *Acceso y Registro de Usuarios en ConForce*\n\nPuedes crear tu cuenta de cliente en segundos con tu correo, teléfono y dirección de entrega habitual. Así podrás guardar favoritos, acumular historial y pagar con un solo clic.\n\n👉 Accede a tu cuenta o regístrate haciendo clic abajo:`,
+      foundProducts: [],
+      recommendedBusinesses: businesses.slice(0, 2),
+      deepLink: buildDeepLink(),
+      actionType: 'open_client_auth'
+    };
+  }
+
+  // 5. Interactive Map & Nearby Stores
+  if (
+    cleanQuery.includes('mapa') ||
+    cleanQuery.includes('donde estan') ||
+    cleanQuery.includes('dónde están') ||
+    cleanQuery.includes('cercanos') ||
+    cleanQuery.includes('ubicacion') ||
+    cleanQuery.includes('ubicación')
+  ) {
+    return {
+      messageText: `🗺️ *Mapa Interactivo de Comercios ConForce*\n\nPuedes explorar las tiendas afiliadas directamente sobre el mapa, filtradas por cercanía GPS, rubro y estado de apertura.\n\n👉 Haz clic abajo para abrir el mapa interactivo:`,
+      foundProducts: [],
+      recommendedBusinesses: businesses.slice(0, 3),
+      deepLink: buildDeepLink(),
+      actionType: 'view_map'
+    };
+  }
 
   // Natural conversational greeting replies
   if (/^(buenas tardes|tardes)$/i.test(cleanQuery)) {

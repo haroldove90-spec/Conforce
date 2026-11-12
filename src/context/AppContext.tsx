@@ -114,14 +114,30 @@ interface AppContextType {
 
   // Cart
   cart: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (
+    product: Product,
+    quantity?: number,
+    customization?: {
+      selectedVariantOption?: { variantName: string; optionLabel: string; priceDelta: number };
+      selectedExtras?: SelectedExtra[];
+      kitchenNotes?: string;
+    }
+  ) => void;
   removeFromCart: (productId: string) => void;
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
   cartSubtotal: number;
+  cartSubtotalUsd: number;
   cartTotalCount: number;
   serviceFeeRate: number;
   cartServiceFee: number;
+
+  // Currency & Dual Display (Bolívares Bs. / Dólares $ USD)
+  exchangeRateUsd: number;
+  setExchangeRateUsd: (rate: number) => void;
+  currencyDisplayMode: 'dual' | 'bs' | 'usd';
+  setCurrencyDisplayMode: (mode: 'dual' | 'bs' | 'usd') => void;
+  formatCurrency: (amountBs: number) => { bs: string; usd: string; formatted: string };
 
   // Demand Radar & Search Intelligence
   failedSearches: FailedSearchRecord[];
@@ -299,8 +315,8 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Default coordinates: CDMX Center (fallback if no GPS)
-const DEFAULT_CENTER_COORDS: Coordinates = { lat: 19.4120, lng: -99.1650 };
+// Default coordinates: Caracas, Venezuela (fallback if no GPS)
+const DEFAULT_CENTER_COORDS: Coordinates = { lat: 10.4806, lng: -66.9036 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Roles & View Tabs - Synchronized with URL parameters and persistent state
@@ -2532,19 +2548,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateOrderInSupabase(orderId, { status: 'cancelled', cancellationReason: reason });
   };
 
-  // Cart
-  const addToCart = (product: Product, quantity = 1) => {
+  // Currency & Exchange Rate State (Bolívares Bs. / Dólares $ USD)
+  const [exchangeRateUsd, setExchangeRateUsdState] = useState<number>(() => {
+    const saved = localStorage.getItem('mk_exchange_rate_usd');
+    if (saved) {
+      const parsed = parseFloat(saved);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return 60.00; // Tasa de cambio promedio oficial en Venezuela
+  });
+
+  const setExchangeRateUsd = (rate: number) => {
+    if (rate > 0) {
+      setExchangeRateUsdState(rate);
+      localStorage.setItem('mk_exchange_rate_usd', rate.toString());
+    }
+  };
+
+  const [currencyDisplayMode, setCurrencyDisplayMode] = useState<'dual' | 'bs' | 'usd'>('dual');
+
+  const formatCurrency = (amountBs: number) => {
+    const safeAmount = Number(amountBs) || 0;
+    const bsFormatted = `Bs. ${safeAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const usdVal = exchangeRateUsd > 0 ? safeAmount / exchangeRateUsd : 0;
+    const usdFormatted = `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    let display = `${bsFormatted} (${usdFormatted})`;
+    if (currencyDisplayMode === 'bs') display = bsFormatted;
+    if (currencyDisplayMode === 'usd') display = usdFormatted;
+
+    return {
+      bs: bsFormatted,
+      usd: usdFormatted,
+      formatted: display
+    };
+  };
+
+  // Cart with variant and extras customization support
+  const addToCart = (
+    product: Product,
+    quantity = 1,
+    customization?: {
+      selectedVariantOption?: { variantName: string; optionLabel: string; priceDelta: number };
+      selectedExtras?: SelectedExtra[];
+      kitchenNotes?: string;
+    }
+  ) => {
+    const variantDelta = customization?.selectedVariantOption?.priceDelta || 0;
+    const extrasTotal = customization?.selectedExtras?.reduce((sum, e) => sum + e.price, 0) || 0;
+    const itemTotalBs = product.price + variantDelta + extrasTotal;
+
     setCart(prev => {
-      // If adding from another business, notify/replace or allow
-      const existing = prev.find(item => item.product.id === product.id);
-      if (existing) {
-        return prev.map(item =>
-          item.product.id === product.id
+      // Unique item identity includes variant and extras signature
+      const variantKey = customization?.selectedVariantOption
+        ? `${customization.selectedVariantOption.variantName}:${customization.selectedVariantOption.optionLabel}`
+        : '';
+      const extrasKey = customization?.selectedExtras && customization.selectedExtras.length > 0
+        ? customization.selectedExtras.map(e => e.id).sort().join(',')
+        : '';
+      const notesKey = customization?.kitchenNotes?.trim() || '';
+
+      const matchIndex = prev.findIndex(item => {
+        if (item.product.id !== product.id) return false;
+        const itemVarKey = item.selectedVariantOption
+          ? `${item.selectedVariantOption.variantName}:${item.selectedVariantOption.optionLabel}`
+          : '';
+        const itemExtrasKey = item.selectedExtras && item.selectedExtras.length > 0
+          ? item.selectedExtras.map(e => e.id).sort().join(',')
+          : '';
+        const itemNotesKey = item.kitchenNotes?.trim() || '';
+        return itemVarKey === variantKey && itemExtrasKey === extrasKey && itemNotesKey === notesKey;
+      });
+
+      if (matchIndex >= 0) {
+        return prev.map((item, idx) =>
+          idx === matchIndex
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       }
-      return [...prev, { product, quantity, businessId: product.businessId }];
+
+      return [
+        ...prev,
+        {
+          product,
+          quantity,
+          businessId: product.businessId,
+          selectedVariantOption: customization?.selectedVariantOption,
+          selectedExtras: customization?.selectedExtras,
+          kitchenNotes: customization?.kitchenNotes,
+          itemTotalBs
+        }
+      ];
     });
   };
 
@@ -2566,7 +2661,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const clearCart = () => setCart([]);
 
-  const cartSubtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const cartSubtotal = cart.reduce((sum, item) => {
+    const variantDelta = item.selectedVariantOption?.priceDelta || 0;
+    const extrasTotal = item.selectedExtras?.reduce((eSum, e) => eSum + e.price, 0) || 0;
+    const unitPrice = item.itemTotalBs ?? (item.product.price + variantDelta + extrasTotal);
+    return sum + unitPrice * item.quantity;
+  }, 0);
+  const cartSubtotalUsd = exchangeRateUsd > 0 ? cartSubtotal / exchangeRateUsd : 0;
   const cartTotalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const serviceFeeRate = 0.05; // 5% de tarifa de servicio a consumidor
   const cartServiceFee = cartSubtotal > 0 ? Math.max(10, Math.round(cartSubtotal * serviceFeeRate)) : 0;
@@ -2934,9 +3035,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateCartQuantity,
         clearCart,
         cartSubtotal,
+        cartSubtotalUsd,
         cartTotalCount,
         serviceFeeRate,
         cartServiceFee,
+
+        // Currency (Bs. / USD)
+        exchangeRateUsd,
+        setExchangeRateUsd,
+        currencyDisplayMode,
+        setCurrencyDisplayMode,
+        formatCurrency,
 
         // Demand Radar & Search Intelligence
         failedSearches,

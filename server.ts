@@ -21,11 +21,114 @@ interface FallbackOutput {
   matchedBusinessIds: string[];
   matchedProductIds: string[];
   category: string | null;
+  actionType?: string;
 }
 
 function generateServerFallback(userMessage: string, catalogContext: any[]): FallbackOutput {
   const query = (userMessage || '').trim().toLowerCase();
   const cleanQuery = query.replace(/[.,/#!$%^&*;:{}=\-_`~()¿?¡!]/g, '').trim();
+
+  // 1. Motorcycle Couriers / Repartidores en Moto
+  if (
+    cleanQuery.includes('moto') ||
+    cleanQuery.includes('mensajero') ||
+    cleanQuery.includes('repartidor') ||
+    cleanQuery.includes('motorizado') ||
+    cleanQuery.includes('delivery') ||
+    cleanQuery.includes('carrera') ||
+    cleanQuery.includes('chofer') ||
+    cleanQuery.includes('conducir')
+  ) {
+    return {
+      messageText: `🛵 *¡Únete a la Flota de Mensajeros en Moto de ConForce Venezuela!*\n\nGenera ingresos diarios entregando pedidos de comercios y restaurantes aliados en tu ciudad.\n\n📋 *Requisitos para registrarte:*\n• Motocicleta propia en buen estado con casco (ej. Bera SBR 150, Empire Keeway Horse, Suzuki GN 125, etc.).\n• Cédula de Identidad (V/E) y Licencia de conducir vigente.\n• Placa visible del vehículo.\n• Teléfono inteligente con GPS y cuenta bancaria para cobrar por Pago Móvil en Bolívares (Bs.).\n\n✨ *Beneficios:*\n• Pagos directos por cada carrera completada.\n• Panel táctil para mensajeros con navegación integrada en Google Maps y Waze.\n• Horarios flexibles y soporte continuo.\n\n👉 Haz clic en el botón abajo para abrir el formulario de registro de mensajeros en moto:`,
+      matchedBusinessIds: [],
+      matchedProductIds: [],
+      category: null,
+      actionType: 'open_driver_register'
+    };
+  }
+
+  // 2. Business / Store Registration
+  if (
+    cleanQuery.includes('negocio') ||
+    cleanQuery.includes('comercio') ||
+    cleanQuery.includes('afiliar') ||
+    cleanQuery.includes('vender') ||
+    cleanQuery.includes('tienda') ||
+    cleanQuery.includes('publicar') ||
+    cleanQuery.includes('abrir tienda') ||
+    cleanQuery.includes('registrar mi negocio')
+  ) {
+    return {
+      messageText: `🏪 *¡Registra tu Comercio en ConForce Marketplace!*\n\n¡La publicación de catálogos y productos es **100% GRATUITA** para todos los comercios y emprendedores en Venezuela!\n\n📋 *Requisitos de afiliación:*\n• Nombre comercial y categoría de tu tienda (Tecnología, Restaurante, Farmacia, Repuestos, Víveres, etc.).\n• Documento de identidad o RIF.\n• Número de WhatsApp comercial para recibir pedidos al instante.\n• Dirección física para despacho o retiro en tienda.\n\n✨ *Ventajas para tu negocio:*\n• Panel en vivo para gestionar productos, fotos y precios en Bolívares (Bs.).\n• Integración directa con mensajeros en moto para delivery express.\n• Opciones de Ads y Boost para posicionar tus productos como "Ofertas del Día".\n\n👉 Haz clic abajo para completar tu registro de negocio de inmediato:`,
+      matchedBusinessIds: [],
+      matchedProductIds: [],
+      category: null,
+      actionType: 'open_business_register'
+    };
+  }
+
+  // 3. Buying guide, payments & fees
+  if (
+    cleanQuery.includes('como comprar') ||
+    cleanQuery.includes('cómo comprar') ||
+    cleanQuery.includes('como pedir') ||
+    cleanQuery.includes('cómo pedir') ||
+    cleanQuery.includes('como funciona') ||
+    cleanQuery.includes('pago movil') ||
+    cleanQuery.includes('pago móvil') ||
+    cleanQuery.includes('metodo de pago') ||
+    cleanQuery.includes('metodos de pago') ||
+    cleanQuery.includes('tarifa') ||
+    cleanQuery.includes('costo de envio') ||
+    cleanQuery.includes('costo de envío') ||
+    cleanQuery.includes('comision') ||
+    cleanQuery.includes('comisión')
+  ) {
+    return {
+      messageText: `🛍️ *Guía Oficial de Compra en ConForce Venezuela:*\n\nComprar en nuestro Marketplace es rápido, transparente y seguro:\n\n1️⃣ **Explora:** Busca productos en el catálogo o en el mapa interactivo por cercanía.\n2️⃣ **Agrega al Carrito:** Selecciona tus artículos con precios actualizados en Bolívares (Bs.).\n3️⃣ **Elige tu Entrega:**\n   • 🛵 **Delivery en Moto:** Tarifa plana de **Bs. 35** (entregas en < 45 min).\n   • 🏬 **Retiro en Tienda:** Totalmente Gratis.\n4️⃣ **Pago Seguro:** Paga cómodamente mediante **Pago Móvil** o transferencia bancaria e ingresa tu número de referencia.\n5️⃣ **Rastreo en Vivo:** Conoce el estado de tu pedido y visualiza al mensajero asignado en camino.\n\n*(Tarifa de servicio: 5% del subtotal para soporte prioritario y seguro de entrega).*`,
+      matchedBusinessIds: [],
+      matchedProductIds: [],
+      category: null,
+      actionType: 'view_cart'
+    };
+  }
+
+  // 4. Client Account / Login / Register
+  if (
+    cleanQuery.includes('iniciar sesion') ||
+    cleanQuery.includes('iniciar sesión') ||
+    cleanQuery.includes('crear cuenta') ||
+    cleanQuery.includes('registrarse') ||
+    cleanQuery.includes('mi cuenta') ||
+    cleanQuery.includes('login')
+  ) {
+    return {
+      messageText: `👤 *Acceso y Registro de Usuarios en ConForce*\n\nPuedes crear tu cuenta de cliente en segundos con tu correo, teléfono y dirección de entrega habitual. Así podrás guardar favoritos, acumular historial y pagar con un solo clic.\n\n👉 Accede a tu cuenta o regístrate haciendo clic abajo:`,
+      matchedBusinessIds: [],
+      matchedProductIds: [],
+      category: null,
+      actionType: 'open_client_auth'
+    };
+  }
+
+  // 5. Interactive Map & Nearby Stores
+  if (
+    cleanQuery.includes('mapa') ||
+    cleanQuery.includes('donde estan') ||
+    cleanQuery.includes('dónde están') ||
+    cleanQuery.includes('cercanos') ||
+    cleanQuery.includes('ubicacion') ||
+    cleanQuery.includes('ubicación')
+  ) {
+    return {
+      messageText: `🗺️ *Mapa Interactivo de Comercios ConForce*\n\nPuedes explorar las tiendas afiliadas directamente sobre el mapa, filtradas por cercanía GPS, rubro y estado de apertura.\n\n👉 Haz clic abajo para abrir el mapa interactivo:`,
+      matchedBusinessIds: (catalogContext || []).slice(0, 3).map((b: any) => b.id),
+      matchedProductIds: [],
+      category: null,
+      actionType: 'view_map'
+    };
+  }
 
   // 1. Natural greeting responses
   if (/^(buenas tardes|tardes)$/i.test(cleanQuery)) {
@@ -172,26 +275,40 @@ const handleGeminiAssistant = async (req: express.Request, res: express.Response
       }
     });
 
-    const systemInstruction = `Eres "Asistente ConForce", el asesor de compras inteligente, empático y servicial de ConForce Venezuela (Marketplace Multicategoría de Comercio, Tecnología, Alimentos, Farmacia, Ferretería, Repuestos, Moda y Servicios en Venezuela).
-Tu objetivo es atender a los clientes por WhatsApp con tono ultra profesional, cálido, ágil y enfocado en ayudarlos a encontrar lo que necesitan en el marketplace.
+    const systemInstruction = `Eres "Asistente ConForce", el asesor inteligente, empático y experto de ConForce Venezuela (Marketplace Multicategoría de Comercio, Tecnología, Alimentos, Farmacia, Ferretería, Repuestos, Moda y Servicios en Venezuela).
+Tu objetivo es orientar a los usuarios tanto en la web como en WhatsApp con tono profesional, cálido, ágil y resolutivo.
 
-PAUTAS CRUCIALES DE CONVERSACIÓN:
-1. SALUDOS Y CORTESÍA:
-   - Si el cliente te saluda (ej: "Buenas tardes", "Buenos días", "Buenas noches", "Hola", "Saludos", "Qué tal"):
-     RESPONDE DIRECTAMENTE AL SALUDO con amabilidad y educación humana (ej: si dice "Buenas tardes", responde: "¡Buenas tardes! ☀️ Un placer saludarte. Bienvenido a ConForce Venezuela. ¿En qué te puedo colaborar hoy? ¿Buscas tecnología, comida, farmacia, repuestos o algún servicio?").
-     No sueltes discursos prefabricados ni párrafos impersonales.
-     En un saludo simple, matchedBusinessIds y matchedProductIds deben ser arreglos vacíos [].
-   - Si el cliente te saluda Y pregunta algo a la vez (ej: "Buenas tardes, ¿tienen comida o pizza?"):
-     Devuélvele el saludo con cortesía ("¡Buenas tardes! 🍕 Con gusto...") y atiende de inmediato lo que busca.
+CAPACIDADES Y CONOCIMIENTO OFICIAL DEL MARKETPLACE:
 
-2. MULTICATEGORÍA COMPLETA:
-   - Con Force vende de TODO: teléfonos y computación, comida y restaurantes, medicinas y farmacia, supermercado y víveres, herramientas y ferretería, ropa y calzado, repuestos automotrices, etc.
-   - NUNCA asumas que el usuario busca repuestos a menos que él lo mencione explícitamente.
+1. ASESORÍA DE REGISTRO PARA COMERCIOS Y NEGOCIOS:
+   - Si el usuario pregunta cómo afiliar su tienda, registrar su negocio o vender productos:
+     * Explícale que la publicación de catálogos y productos en ConForce es 100% GRATUITA para todos los comercios y emprendedores.
+     * Requisitos: Nombre comercial, RIF o documento de identidad, número de WhatsApp para recibir pedidos directamente y catálogo inicial.
+     * Cuentan con panel en vivo para actualizar precios e inventario en Bs., además de opciones de Ads/Boost para destacar productos.
+     * Asigna actionType: "open_business_register".
 
-3. PRECIOS Y DISPONIBILIDAD:
-   - Moneda oficial: Bolívares (Bs.). Precios transparentes.
-   - Si el producto exacto no está en el catálogo, recomiéndale con amabilidad los comercios afines disponibles en Con Force.
-   - Formato WhatsApp: breve, claro, emojis amigables (🇻🇪, 🛒, 📱, 🍔, 💊, 🛠️, 🚗, ✨) y llamada a la acción.`;
+2. ASESORÍA DE REGISTRO PARA MENSAJEROS EN MOTO:
+   - Si el usuario pregunta cómo ser repartidor, mensajero en moto o generar ingresos entregando pedidos:
+     * Explícale que ConForce dispone de una flota activa de mensajería express en moto.
+     * Requisitos: Motocicleta propia en buen estado (ej. Bera SBR 150, Empire Keeway Horse, Suzuki GN 125, etc.), placa, licencia de conducir vigente, cédula y cuenta bancaria para cobrar por Pago Móvil.
+     * Beneficios: Gana por cada carrera completada, cobros garantizados en Bolívares por Pago Móvil y panel móvil táctil con rutas en Google Maps y Waze.
+     * Asigna actionType: "open_driver_register".
+
+3. GUÍA DE COMPRA Y MÉTODOS DE PAGO:
+   - Si el usuario pregunta cómo comprar, cómo pagar o cómo funciona el marketplace:
+     * Pasos: 1) Explora tiendas y productos en el catálogo o mapa ➔ 2) Añade lo que desees al carrito ➔ 3) Selecciona si deseas Entrega en Moto a Domicilio o Retiro en Tienda ➔ 4) Realiza tu pago en Bolívares (Pago Móvil o Transferencia) e introduce tu número de referencia ➔ 5) Sigue tu pedido en vivo con el motorizado asignado.
+     * Costo de envío delivery local: Bs. 35 tarifa plana en moto (o Gratis en Retiro en Tienda). Tarifa de servicio: 5% del subtotal para soporte prioritario y seguro.
+     * Asigna actionType: "view_cart" o "open_client_auth".
+
+4. BÚSQUEDA DE COMERCIOS Y PRODUCTOS:
+   - Cuando busquen un producto, marca o rubro específico (ej. farmacia, repuestos, comida, celulares):
+     * Proporciona respuesta empática en Bolívares (Bs.).
+     * Rellena matchedProductIds y matchedBusinessIds con los elementos exactos del catálogo.
+     * Asigna actionType: "view_catalog".
+
+5. SALUDOS Y CORTESÍA VENEZOLANA:
+   - Responde con calidez humana ("¡Buenas tardes! ☀️ Un placer saludarte. Bienvenido a ConForce Venezuela...").
+   - Emojis recomendados: 🇻🇪, 🛒, 🏪, 🛵, 📱, 🍔, 💊, 🛠️, 🚗, ✨.`;
 
     const prompt = `UBICACIÓN DEL CLIENTE: ${userLocation ? `Lat: ${userLocation.lat}, Lng: ${userLocation.lng}` : 'No especificada'}
 
@@ -201,7 +318,7 @@ ${JSON.stringify(catalogContext || [], null, 2)}
 MENSAJE DEL CLIENTE:
 "${userMessage}"
 
-Analiza el mensaje del cliente. Si es un saludo, responde al saludo con cortesía y pregúntale en qué le ayudas. Si busca productos o servicios, oriéntalo con precisión.`;
+Analiza el mensaje del cliente. Si busca registrarse como negocio o mensajero, oriéntalo con los requisitos y fija el actionType correspondiente. Si busca comprar o rastrear, dale la guía de compra. Si busca productos, indícale opciones y precios en Bs.`;
 
     // Try models with separate quota allocations and fallback order
     const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
@@ -220,7 +337,11 @@ Analiza el mensaje del cliente. Si es un saludo, responde al saludo con cortesí
               properties: {
                 messageText: {
                   type: Type.STRING,
-                  description: 'Texto de respuesta profesional en español adaptado para WhatsApp con emojis.'
+                  description: 'Texto de respuesta profesional, empático y completo con emojis en español venezolano.'
+                },
+                actionType: {
+                  type: Type.STRING,
+                  description: 'Acción interactiva recomendada: "open_business_register", "open_driver_register", "open_client_auth", "view_cart", "view_map", "view_catalog", o "none".'
                 },
                 matchedBusinessIds: {
                   type: Type.ARRAY,

@@ -37,8 +37,12 @@ export const WebAssistantChatModal: React.FC = () => {
     businesses,
     userLocation,
     addToCart,
-    setSelectedBusinessForDetail,
-    openWhatsAppWithPrompt
+    openWhatsAppWithPrompt,
+    openBusinessRegistration,
+    openDriverRegistration,
+    setIsClientAuthModalOpen,
+    setClientAuthIntent,
+    setActiveClientTab
   } = useApp();
 
   const [inputMessage, setInputMessage] = useState('');
@@ -64,16 +68,24 @@ export const WebAssistantChatModal: React.FC = () => {
           {
             id: 'msg-welcome',
             sender: 'bot',
-            text: '👋 ¡Hola! Soy tu Asistente Virtual en ConForce Venezuela. 🛒\n\nSomos un Marketplace integral: puedo ayudarte a encontrar cualquier producto (tecnología, alimentos, farmacia, restaurantes, ferretería, repuestos, moda) o resolver tus dudas de compra.',
+            text: '👋 ¡Hola! Soy tu Asistente Virtual en ConForce Venezuela. 🇻🇪🛒\n\nPuedo orientarte con búsquedas de productos (tecnología, comida, víveres, farmacia, repuestos), cómo comprar paso a paso, o cómo registrarte como **Comercio Aliado** o **Mensajero en Moto**.',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             quickActions: [
               {
-                label: '🛒 Explorar Catálogo',
-                action: () => handleSendPreset('¿Qué categorías y productos tienen disponibles?')
+                label: '🛵 ¿Cómo ser mensajero en moto?',
+                action: () => handleSendPreset('¿Cómo puedo registrarme como mensajero en moto y ganar dinero?')
               },
               {
-                label: '📱 Tecnología y Celulares',
-                action: () => handleSendPreset('¿Qué celulares y artículos de tecnología tienen?')
+                label: '🏪 ¿Cómo afiliar mi negocio?',
+                action: () => handleSendPreset('¿Cómo registrar mi negocio en el marketplace y vender?')
+              },
+              {
+                label: '🛍️ ¿Cómo comprar en ConForce?',
+                action: () => handleSendPreset('¿Cómo comprar y cuáles son las tarifas de envío?')
+              },
+              {
+                label: '📱 Celulares y Tecnología',
+                action: () => handleSendPreset('¿Qué celulares y artículos de tecnología tienen disponibles?')
               },
               {
                 label: '💊 Farmacias y Salud',
@@ -84,12 +96,8 @@ export const WebAssistantChatModal: React.FC = () => {
                 action: () => handleSendPreset('¿Qué opciones de comida o restaurantes hay con delivery?')
               },
               {
-                label: '🚗 Repuestos y Vehículos',
+                label: '🚗 Repuestos de Autos',
                 action: () => handleSendPreset('¿Qué repuestos para vehículos tienen en catálogo?')
-              },
-              {
-                label: '📦 Tarifas y Envíos',
-                action: () => handleSendPreset('¿Cómo funcionan los costos de envío y la tarifa de servicio?')
               }
             ]
           }
@@ -106,17 +114,58 @@ export const WebAssistantChatModal: React.FC = () => {
     const lower = userQuery.toLowerCase();
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // 1. Seller question
-    if (lower.includes('vender') || lower.includes('comercio') || lower.includes('afiliar') || lower.includes('negocio')) {
+    // 1. Motorcycle Couriers / Drivers
+    if (
+      lower.includes('moto') ||
+      lower.includes('mensajero') ||
+      lower.includes('repartidor') ||
+      lower.includes('motorizado') ||
+      lower.includes('delivery') ||
+      lower.includes('carrera') ||
+      lower.includes('chofer')
+    ) {
       return {
         id: `msg-${Date.now()}`,
         sender: 'bot',
-        text: '🏪 ¡Excelente noticia! En ConForce la **publicación de catálogos y productos es 100% gratuita** para todos los comercios y emprendedores. Además, cuentas con herramientas opcionales de Ads/Boost para destacar tus productos en las primeras posiciones con máxima visibilidad.',
+        text: '🛵 *¡Únete a la Flota de Mensajeros en Moto de ConForce Venezuela!*\n\nGenera ingresos diarios entregando pedidos de comercios y restaurantes aliados en tu ciudad.\n\n📋 *Requisitos:*\n• Motocicleta en buen estado con casco.\n• Cédula (V/E) y Licencia vigente.\n• Placa visible del vehículo.\n• Teléfono inteligente con GPS y cuenta bancaria para cobrar por Pago Móvil en Bolívares (Bs.).\n\n✨ Pagos directos por carrera completada y panel táctil con rutas en Google Maps y Waze.',
         timestamp: time,
         quickActions: [
           {
-            label: '🚀 Conocer paquetes de Boost Ads',
-            action: () => handleSendPreset('¿Cuánto cuesta impulsar un producto con Ads?')
+            label: '🛵 Abrir Formulario de Mensajeros en Moto',
+            action: () => {
+              openDriverRegistration();
+              setIsWebAssistantOpen(false);
+            }
+          },
+          {
+            label: '💬 Soporte Mensajeros WhatsApp',
+            action: () => openWhatsAppWithPrompt('Hola, deseo postularme como mensajero en moto en ConForce.')
+          }
+        ]
+      };
+    }
+
+    // 2. Business / Store Registration
+    if (
+      lower.includes('vender') ||
+      lower.includes('comercio') ||
+      lower.includes('afiliar') ||
+      lower.includes('negocio') ||
+      lower.includes('tienda') ||
+      lower.includes('publicar')
+    ) {
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'bot',
+        text: '🏪 ¡Excelente noticia! En ConForce la **publicación de catálogos y productos es 100% gratuita** para todos los comercios y emprendedores en Venezuela.\n\n📋 *Requisitos:*\n• Nombre comercial y categoría de tu tienda.\n• Documento de identidad o RIF.\n• Número de WhatsApp comercial para recibir pedidos al instante.\n• Dirección física para despacho o retiro en tienda.\n\nCuentas con panel en vivo para actualizar precios e inventario en Bs.',
+        timestamp: time,
+        quickActions: [
+          {
+            label: '🏪 Registrar Mi Negocio (Gratis)',
+            action: () => {
+              openBusinessRegistration(false);
+              setIsWebAssistantOpen(false);
+            }
           },
           {
             label: '📲 Contactar a Soporte Comercios',
@@ -126,17 +175,36 @@ export const WebAssistantChatModal: React.FC = () => {
       };
     }
 
-    // 2. Fees and shipping
-    if (lower.includes('envio') || lower.includes('tarifa') || lower.includes('servicio') || lower.includes('costo') || lower.includes('comision')) {
+    // 3. How to buy, fees and shipping
+    if (
+      lower.includes('como comprar') ||
+      lower.includes('cómo comprar') ||
+      lower.includes('como pedir') ||
+      lower.includes('envio') ||
+      lower.includes('tarifa') ||
+      lower.includes('servicio') ||
+      lower.includes('costo') ||
+      lower.includes('comision') ||
+      lower.includes('pago movil')
+    ) {
       return {
         id: `msg-${Date.now()}`,
         sender: 'bot',
-        text: '🛡️ En ConForce manejamos total transparencia:\n• **Costo de envío:** Bs. 35 para entregas locales en menos de 45 minutos (o Gratis en Retiro en Tienda).\n• **Tarifa de servicio:** 5% del subtotal de tu compra para garantizar soporte prioritario, rastreo en vivo y seguro de entrega.',
-        timestamp: time
+        text: '🛍️ *Guía Oficial de Compra en ConForce Venezuela:*\n\n1️⃣ **Explora:** Revisa comercios y productos en el catálogo o mapa.\n2️⃣ **Carrito:** Agrega los productos que deseas en Bolívares (Bs.).\n3️⃣ **Entrega:** Selecciona Delivery en Moto (Bs. 35 flat) o Retiro en Tienda (Gratis).\n4️⃣ **Pago:** Paga cómodamente por Pago Móvil o transferencia bancaria e ingresa tu número de referencia.\n5️⃣ **Rastreo:** Sigue a tu mensajero asignado en tiempo real.\n\n*(Tarifa de servicio: 5% del subtotal para soporte prioritario y seguro).*',
+        timestamp: time,
+        quickActions: [
+          {
+            label: '🛒 Explorar Catálogo y Comprar',
+            action: () => {
+              setActiveClientTab('explore');
+              setIsWebAssistantOpen(false);
+            }
+          }
+        ]
       };
     }
 
-    // 3. Search matching in products catalog
+    // 4. Search matching in products catalog
     const matchedProducts = products.filter((p) => {
       const q = lower;
       return (
@@ -160,19 +228,36 @@ export const WebAssistantChatModal: React.FC = () => {
         quickActions: [
           {
             label: '🛒 Ver más en el catálogo',
-            action: () => setIsWebAssistantOpen(false)
+            action: () => {
+              setActiveClientTab('explore');
+              setIsWebAssistantOpen(false);
+            }
           }
         ]
       };
     }
 
-    // 4. Default helpful answer
+    // 5. Default helpful answer
     return {
       id: `msg-${Date.now()}`,
       sender: 'bot',
-      text: `Entiendo tu consulta sobre "${userQuery}". He registrado tu solicitud. Puedes explorar nuestras tiendas verificadas en la pantalla principal o chatear directamente con nuestro equipo de atención humana por WhatsApp.`,
+      text: `Entiendo tu consulta sobre "${userQuery}". En ConForce contamos con comercios de tecnología, restaurantes, víveres, farmacias, ferreterías y repuestos.\n\n¿Deseas buscar un producto específico o registrarte como comercio o mensajero en moto?`,
       timestamp: time,
       quickActions: [
+        {
+          label: '🛵 Registro de Mensajeros',
+          action: () => {
+            openDriverRegistration();
+            setIsWebAssistantOpen(false);
+          }
+        },
+        {
+          label: '🏪 Registro de Negocios',
+          action: () => {
+            openBusinessRegistration(false);
+            setIsWebAssistantOpen(false);
+          }
+        },
         {
           label: '💬 Chatear por WhatsApp',
           action: () => openWhatsAppWithPrompt(`Hola, necesito orientación sobre: ${userQuery}`)
@@ -200,22 +285,79 @@ export const WebAssistantChatModal: React.FC = () => {
       const response = await processChatbotMessage(text, userLocation, businesses, products);
       setIsTyping(false);
 
+      // Construct dynamic contextual actions based on actionType
+      const dynamicActions: { label: string; action: () => void }[] = [];
+
+      if (response.actionType === 'open_driver_register') {
+        dynamicActions.push({
+          label: '🛵 Abrir Formulario de Mensajeros en Moto',
+          action: () => {
+            openDriverRegistration();
+            setIsWebAssistantOpen(false);
+          }
+        });
+        dynamicActions.push({
+          label: '💬 Consultar Flota WhatsApp',
+          action: () => openWhatsAppWithPrompt('Hola, deseo postularme como mensajero en moto en ConForce.')
+        });
+      } else if (response.actionType === 'open_business_register') {
+        dynamicActions.push({
+          label: '🏪 Registrar Mi Negocio (Gratis)',
+          action: () => {
+            openBusinessRegistration(false);
+            setIsWebAssistantOpen(false);
+          }
+        });
+        dynamicActions.push({
+          label: '📲 Soporte Comercios WhatsApp',
+          action: () => openWhatsAppWithPrompt('Hola, deseo registrar mi negocio en el marketplace ConForce.')
+        });
+      } else if (response.actionType === 'open_client_auth') {
+        dynamicActions.push({
+          label: '👤 Iniciar Sesión / Registrarme',
+          action: () => {
+            setClientAuthIntent('login');
+            setIsClientAuthModalOpen(true);
+            setIsWebAssistantOpen(false);
+          }
+        });
+      } else if (response.actionType === 'view_map') {
+        dynamicActions.push({
+          label: '🗺️ Abrir Mapa Interactivo',
+          action: () => {
+            setActiveClientTab('map');
+            setIsWebAssistantOpen(false);
+          }
+        });
+      } else if (response.actionType === 'view_cart') {
+        dynamicActions.push({
+          label: '🛍️ Ver Carrito / Comprar',
+          action: () => {
+            setActiveClientTab('explore');
+            setIsWebAssistantOpen(false);
+          }
+        });
+      } else {
+        dynamicActions.push({
+          label: '🛒 Ver más en el catálogo',
+          action: () => {
+            setActiveClientTab('explore');
+            setIsWebAssistantOpen(false);
+          }
+        });
+        dynamicActions.push({
+          label: '📲 Consultar por WhatsApp',
+          action: () => openWhatsAppWithPrompt(text)
+        });
+      }
+
       const botResponse: ChatMessage = {
         id: `msg-${Date.now()}`,
         sender: 'bot',
         text: response.messageText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedProducts: response.foundProducts.slice(0, 3),
-        quickActions: [
-          {
-            label: '🛒 Ver más en el catálogo',
-            action: () => setIsWebAssistantOpen(false)
-          },
-          {
-            label: '📲 Consultar por WhatsApp',
-            action: () => openWhatsAppWithPrompt(text)
-          }
-        ]
+        quickActions: dynamicActions
       };
 
       setMessages((prev) => [...prev, botResponse]);
