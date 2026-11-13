@@ -30,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
     userAddressLabel,
     detectUserLocation,
     isLocating,
+    setIsLocationPickerOpen,
     setIsClientAuthModalOpen,
     setIsCorporateAuthModalOpen,
     openCorporateAuth,
@@ -121,20 +122,28 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
 
         {/* Center: GPS Location Pill (Clean, compact, and truncated) */}
         <div className="flex-1 max-w-xs hidden md:flex items-center justify-center min-w-0">
-          <button
-            onClick={detectUserLocation}
-            disabled={isLocating}
-            className="w-full max-w-[220px] flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-xs text-white transition-all text-left shadow-xs cursor-pointer"
-            title="Actualizar mi ubicación GPS"
-          >
-            <div className="flex items-center gap-1.5 min-w-0">
+          <div className="w-full max-w-[240px] flex items-center justify-between gap-1 px-2.5 py-1 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-white shadow-xs">
+            <button
+              type="button"
+              onClick={() => setIsLocationPickerOpen(true)}
+              className="flex items-center gap-1.5 min-w-0 flex-1 text-left hover:text-white transition-colors py-0.5 cursor-pointer"
+              title="Cambiar ciudad en Venezuela"
+            >
               <MapPin className="w-3.5 h-3.5 text-[#D4021D] shrink-0" />
               <span className="truncate text-zinc-300 font-medium text-xs">
                 {userAddressLabel}
               </span>
-            </div>
-            <LocateFixed className={`w-3.5 h-3.5 text-zinc-400 shrink-0 ${isLocating ? 'animate-spin text-[#D4021D]' : ''}`} />
-          </button>
+            </button>
+            <button
+              type="button"
+              onClick={() => detectUserLocation(true)}
+              disabled={isLocating}
+              className="p-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+              title="Actualizar mi ubicación GPS"
+            >
+              <LocateFixed className={`w-3.5 h-3.5 text-zinc-400 ${isLocating ? 'animate-spin text-[#D4021D]' : ''}`} />
+            </button>
+          </div>
         </div>
 
         {/* Right: User, Logout & Cart Actions */}

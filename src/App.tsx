@@ -24,6 +24,7 @@ import { CorporateAuthModal } from './components/common/CorporateAuthModal';
 import { UserProfileModal } from './components/common/UserProfileModal';
 import { RegisterBusinessModal } from './components/common/RegisterBusinessModal';
 import { RegisterDriverModal } from './components/common/RegisterDriverModal';
+import { LocationPickerModal } from './components/common/LocationPickerModal';
 import { CorporatePortalHome } from './components/corporate/CorporatePortalHome';
 import { Business } from './types';
 
@@ -139,6 +140,7 @@ const PulsoAppContent: React.FC = () => {
       <UserProfileModal />
       <RegisterBusinessModal />
       <RegisterDriverModal />
+      <LocationPickerModal />
 
       {/* Business Catalog / Detail Modal */}
       {selectedBusinessForDetail && (

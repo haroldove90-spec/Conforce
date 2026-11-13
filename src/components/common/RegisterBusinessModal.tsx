@@ -14,10 +14,18 @@ import {
   Sparkles,
   ArrowRight,
   Award,
-  Crown
+  Crown,
+  LocateFixed,
+  Navigation
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PasswordInput } from './PasswordInput';
+import {
+  VENEZUELAN_CITIES,
+  findNearestVenezuelanCity,
+  geocodeVenezuelaAddress,
+  isInsideVenezuela
+} from '../../utils/venezuelaGeo';
 
 export const RegisterBusinessModal: React.FC = () => {
   const {
@@ -27,7 +35,8 @@ export const RegisterBusinessModal: React.FC = () => {
     setIsRegisteringAsSponsor,
     registerBusiness,
     upgradeClientToBusiness,
-    currentUser
+    currentUser,
+    userLocation
   } = useApp();
 
   const isClientLoggedIn = Boolean(currentUser && currentUser.role === 'client');
@@ -37,6 +46,11 @@ export const RegisterBusinessModal: React.FC = () => {
   const [businessName, setBusinessName] = useState('');
   const [category, setCategory] = useState('Repuestos Nuevos Chevrolet / Ford / Toyota');
   const [address, setAddress] = useState('');
+  const [selectedCityName, setSelectedCityName] = useState(VENEZUELAN_CITIES[0].name);
+  const [bizLat, setBizLat] = useState<number>(VENEZUELAN_CITIES[0].lat);
+  const [bizLng, setBizLng] = useState<number>(VENEZUELAN_CITIES[0].lng);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geoHint, setGeoHint] = useState('');
   const [phone, setPhone] = useState('');
   const [rifOrNit, setRifOrNit] = useState('');
   const [description, setDescription] = useState('');
@@ -53,7 +67,7 @@ export const RegisterBusinessModal: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sync isSponsor with isRegisteringAsSponsor when opened
+  // Sync isSponsor and default city with user's active location when opened
   useEffect(() => {
     if (isRegisterBusinessModalOpen) {
       setIsSponsor(isRegisteringAsSponsor);
@@ -64,6 +78,13 @@ export const RegisterBusinessModal: React.FC = () => {
         setSelectedEmoji('🏢');
         setCategory('Comercio General, Variedades & Regalos');
       }
+      if (userLocation && isInsideVenezuela(userLocation.lat, userLocation.lng)) {
+        const nearest = findNearestVenezuelanCity(userLocation.lat, userLocation.lng);
+        setSelectedCityName(nearest.name);
+        setBizLat(userLocation.lat);
+        setBizLng(userLocation.lng);
+      }
+      setGeoHint('');
     }
   }, [isRegisterBusinessModalOpen, isRegisteringAsSponsor]);
 
@@ -96,6 +117,8 @@ export const RegisterBusinessModal: React.FC = () => {
 
     setIsSubmitting(true);
 
+    const chosenCityObj = VENEZUELAN_CITIES.find((c) => c.name === selectedCityName) || VENEZUELAN_CITIES[0];
+
     try {
       if (isClientLoggedIn) {
         // Upgrade existing client
@@ -103,6 +126,9 @@ export const RegisterBusinessModal: React.FC = () => {
           businessName,
           category,
           address,
+          coordinates: { lat: Number(bizLat), lng: Number(bizLng) },
+          city: chosenCityObj.city,
+          state: chosenCityObj.state,
           phone,
           rifOrNit,
           description,
@@ -146,6 +172,9 @@ export const RegisterBusinessModal: React.FC = () => {
           businessName,
           category,
           address,
+          coordinates: { lat: Number(bizLat), lng: Number(bizLng) },
+          city: chosenCityObj.city,
+          state: chosenCityObj.state,
           phone,
           rifOrNit,
           description,
@@ -364,6 +393,90 @@ export const RegisterBusinessModal: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Ciudad / Estado en Venezuela *
+                </label>
+                <select
+                  value={selectedCityName}
+                  onChange={(e) => {
+                    const found = VENEZUELAN_CITIES.find((c) => c.name === e.target.value);
+                    if (found) {
+                      setSelectedCityName(found.name);
+                      setBizLat(found.lat);
+                      setBizLng(found.lng);
+                      setGeoHint(`Pin fijado en ${found.city}, ${found.state}`);
+                    }
+                  }}
+                  className="w-full py-2 px-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                >
+                  {VENEZUELAN_CITIES.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Ubicación GPS del Comercio
+                </label>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!navigator.geolocation) {
+                        setGeoHint('GPS no disponible; selecciona tu ciudad o usa Ubicar dirección.');
+                        return;
+                      }
+                      setIsGeocoding(true);
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          const nearest = findNearestVenezuelanCity(pos.coords.latitude, pos.coords.longitude);
+                          setBizLat(pos.coords.latitude);
+                          setBizLng(pos.coords.longitude);
+                          setSelectedCityName(nearest.name);
+                          setGeoHint(`GPS capturado (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
+                          setIsGeocoding(false);
+                        },
+                        () => {
+                          setGeoHint('Permiso GPS bloqueado. Selecciona la ciudad o usa "Ubicar dirección".');
+                          setIsGeocoding(false);
+                        },
+                        { enableHighAccuracy: true, timeout: 7000 }
+                      );
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 px-2.5 text-xs font-bold bg-red-50 hover:bg-red-100 text-[#D4021D] border border-red-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <LocateFixed className="w-3.5 h-3.5" />
+                    <span>Usar mi GPS</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isGeocoding || !address.trim()}
+                    onClick={async () => {
+                      setIsGeocoding(true);
+                      const chosen = VENEZUELAN_CITIES.find((c) => c.name === selectedCityName);
+                      const res = await geocodeVenezuelaAddress(
+                        chosen ? `${address}, ${chosen.city}, ${chosen.state}` : address
+                      );
+                      setBizLat(res.lat);
+                      setBizLng(res.lng);
+                      setGeoHint(`Ubicado en ${res.label} (${res.lat.toFixed(4)}, ${res.lng.toFixed(4)})`);
+                      setIsGeocoding(false);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 px-2.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>{isGeocoding ? 'Ubicando...' : 'Ubicar dirección'}</span>
+                  </button>
+                </div>
+                {geoHint && (
+                  <p className="text-[11px] text-emerald-700 font-medium mt-1">{geoHint}</p>
+                )}
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
                   {isSponsor ? 'Dirección Sede o Representación Comercial *' : 'Dirección Física de la Tienda o Taller *'}
@@ -375,7 +488,7 @@ export const RegisterBusinessModal: React.FC = () => {
                     required
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Ej. Av. Francisco de Miranda, Local 4-A, Chacao, Caracas"
+                    placeholder="Ej. Av. Libertador entre calles 12 y 13, San Felipe, Yaracuy"
                     className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   />
                 </div>

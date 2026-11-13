@@ -18,6 +18,8 @@ import {
   ChevronRight
 } from 'lucide-react';
 
+import { VENEZUELAN_CITIES, isMexicoCoords, findNearestVenezuelanCity } from '../../utils/venezuelaGeo';
+
 interface InteractiveMapProps {
   onSelectBusiness?: (business: Business) => void;
   selectedCategory?: 'all' | BusinessCategory | 'offers';
@@ -25,16 +27,6 @@ interface InteractiveMapProps {
 
 const DEFAULT_VENEZUELA_COORDS: [number, number] = [10.4806, -66.9036];
 const DEFAULT_MAP_ZOOM = 13;
-
-// Venezuelan Cities
-const VENEZUELAN_CITIES = [
-  { name: 'Caracas (Distrito Capital)', lat: 10.4806, lng: -66.9036 },
-  { name: 'Valencia (Carabobo)', lat: 10.1620, lng: -68.0077 },
-  { name: 'Maracaibo (Zulia)', lat: 10.6545, lng: -71.6426 },
-  { name: 'Barquisimeto (Lara)', lat: 10.0647, lng: -69.3570 },
-  { name: 'Maracay (Aragua)', lat: 10.2469, lng: -67.5958 },
-  { name: 'Lechería / PLC (Anzoátegui)', lat: 10.1983, lng: -64.6931 }
-];
 
 const TILE_LAYERS: Record<'streets' | 'dark' | 'satellite', { url: string; attribution: string }> = {
   streets: {
@@ -77,10 +69,6 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const radiusLayerRef = useRef<L.Circle | null>(null);
-
-  // Guard against stale Mexico coords if any existed in runtime
-  const isMexicoCoords = (lat?: number, lng?: number) =>
-    typeof lat === 'number' && typeof lng === 'number' && lat > 14 && lat < 25 && lng < -90;
 
   const safeUserLat =
     userLocation && !isMexicoCoords(userLocation.lat, userLocation.lng)
@@ -269,6 +257,13 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (userLocation && !isMexicoCoords(userLocation.lat, userLocation.lng)) {
+      const nearest = findNearestVenezuelanCity(userLocation.lat, userLocation.lng);
+      setSelectedCity(nearest);
+    }
+  }, [userLocation]);
+
   return (
     <div className="relative w-full h-[420px] md:h-[540px] rounded-3xl overflow-hidden border border-slate-200 bg-slate-100 shadow-md select-none">
       {/* Real Leaflet Map Container */}
@@ -338,7 +333,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       <div className="absolute right-3 top-16 flex flex-col gap-2 z-20">
         <button
           onClick={() => {
-            detectUserLocation();
+            detectUserLocation(true);
             if (mapRef.current) {
               mapRef.current.setView([centerLat, centerLng], DEFAULT_MAP_ZOOM, { animate: true });
             }

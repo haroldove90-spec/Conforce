@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Business, BusinessCategory, WhatsAppCampaign } from '../../types';
 import {
+  VENEZUELAN_CITIES,
+  isInsideVenezuela,
+  geocodeVenezuelaAddress
+} from '../../utils/venezuelaGeo';
+import {
   buildDeepLink,
   VERCEL_PRODUCTION_URL,
   VERCEL_MARKETPLACE_URL,
@@ -681,6 +686,15 @@ export const SuperAdminDashboard: React.FC = () => {
                     <p className="font-mono text-[11px] text-slate-400">
                       Pin GPS: [{biz.coordinates.lat.toFixed(4)}, {biz.coordinates.lng.toFixed(4)}]
                     </p>
+                    {!isInsideVenezuela(biz.coordinates?.lat, biz.coordinates?.lng) && (
+                      <button
+                        type="button"
+                        onClick={() => openEditBizModal(biz)}
+                        className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-md text-[11px] font-bold cursor-pointer hover:bg-amber-100"
+                      >
+                        ⚠️ Coordenadas fuera de Venezuela · Corregir Pin
+                      </button>
+                    )}
                     <div className="flex items-center justify-between text-slate-700 font-semibold pt-1">
                       <span>Comisión Plataforma:</span>
                       <span className="text-purple-600 font-bold">{biz.commissionRate}%</span>
@@ -1334,27 +1348,66 @@ export const SuperAdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Coords */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-600 uppercase text-[10px]">Latitud:</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={newBizLat}
-                    onChange={(e) => setNewBizLat(parseFloat(e.target.value))}
-                    className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-purple-600"
-                  />
+              {/* Quick Venezuelan City & Address Pin Selector */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-slate-700 uppercase text-[10px] font-bold">
+                    Ciudad en Venezuela / Pin Rápido
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!newBizAddress.trim()) return;
+                      const res = await geocodeVenezuelaAddress(newBizAddress);
+                      setNewBizLat(Number(res.lat.toFixed(6)));
+                      setNewBizLng(Number(res.lng.toFixed(6)));
+                    }}
+                    className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 rounded-lg text-[10px] font-bold cursor-pointer"
+                  >
+                    Ubicar por dirección
+                  </button>
                 </div>
-                <div>
-                  <label className="text-slate-600 uppercase text-[10px]">Longitud:</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={newBizLng}
-                    onChange={(e) => setNewBizLng(parseFloat(e.target.value))}
-                    className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-purple-600"
-                  />
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const found = VENEZUELAN_CITIES.find((c) => c.name === e.target.value);
+                    if (found) {
+                      setNewBizLat(found.lat);
+                      setNewBizLng(found.lng);
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs focus:outline-none focus:border-purple-600"
+                >
+                  <option value="" disabled>
+                    Seleccionar ciudad de Venezuela...
+                  </option>
+                  {VENEZUELAN_CITIES.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-slate-600 uppercase text-[10px]">Latitud:</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={newBizLat}
+                      onChange={(e) => setNewBizLat(parseFloat(e.target.value))}
+                      className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-purple-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-600 uppercase text-[10px]">Longitud:</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={newBizLng}
+                      onChange={(e) => setNewBizLng(parseFloat(e.target.value))}
+                      className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-purple-600"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

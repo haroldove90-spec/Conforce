@@ -68,6 +68,14 @@ import {
   upsertDriverInSupabase
 } from '../services/supabaseClient';
 import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../utils/urlUtils';
+import {
+  sanitizeBusinessCoordinates,
+  isMexicoCoords,
+  isInsideVenezuela,
+  reverseGeocodeVenezuela,
+  detectIpLocationVenezuela,
+  guessVenezuelaCityFromText
+} from '../utils/venezuelaGeo';
 
 export interface PendingProductOrder {
   productName: string;
@@ -175,7 +183,11 @@ interface AppContextType {
   userAddressLabel: string;
   isLocating: boolean;
   locationPermissionStatus: 'granted' | 'denied' | 'prompt' | 'unknown';
-  detectUserLocation: () => void;
+  locationFeedback: { type: 'info' | 'warning' | 'success' | 'error'; message: string } | null;
+  clearLocationFeedback: () => void;
+  isLocationPickerOpen: boolean;
+  setIsLocationPickerOpen: (open: boolean) => void;
+  detectUserLocation: (manualTrigger?: boolean) => void;
   setUserCustomLocation: (coords: Coordinates, label: string) => void;
   savedAddresses: SavedAddress[];
   addSavedAddress: (addr: Omit<SavedAddress, 'id'>) => void;
@@ -226,6 +238,9 @@ interface AppContextType {
     businessName: string;
     category: string;
     address: string;
+    coordinates?: Coordinates;
+    city?: string;
+    state?: string;
     logo?: string;
     banner?: string;
     phone: string;
@@ -242,6 +257,9 @@ interface AppContextType {
     businessName: string;
     category: string;
     address: string;
+    coordinates?: Coordinates;
+    city?: string;
+    state?: string;
     logo?: string;
     banner?: string;
     phone: string;
@@ -409,15 +427,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [isClearingData, setIsClearingData] = useState<boolean>(false);
 
-  // Business State
+  // Business State (always sanitize any legacy Mexico coords in localStorage)
   const [businesses, setBusinesses] = useState<Business[]>(() => {
+    const sanitizeList = (list: any[]): Business[] =>
+      list.map((b) => {
+        const res = sanitizeBusinessCoordinates(b?.coordinates, b?.address, b?.city, b?.state);
+        return {
+          ...b,
+          coordinates: res.coordinates
+        };
+      });
+
     const isCleared = localStorage.getItem('mk_mock_data_cleared') !== 'false';
     if (isCleared) {
       const saved = localStorage.getItem('mk_businesses');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : [];
+          return Array.isArray(parsed) ? sanitizeList(parsed) : [];
         } catch (e) {}
       }
       return [];
@@ -428,7 +455,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return sanitizeList(parsed);
         }
       } catch (e) {}
     }
@@ -1218,6 +1245,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     businessName: string;
     category: string;
     address: string;
+    coordinates?: Coordinates;
+    city?: string;
+    state?: string;
     logo?: string;
     banner?: string;
     phone: string;
@@ -1247,6 +1277,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const isSponsor = Boolean(data.isSponsor);
     const newBizId = isSponsor ? `biz-sponsor-${Date.now()}` : `biz-${Date.now()}`;
     const newUserId = isSponsor ? `usr-sponsor-${Date.now()}` : `usr-seller-${Date.now()}`;
+    const inferredCity = guessVenezuelaCityFromText([data.city, data.state, data.address].filter(Boolean).join(' '));
+    const sanitized = sanitizeBusinessCoordinates(data.coordinates, data.address, data.city, data.state);
 
     const newBusiness: Business = {
       id: newBizId,
@@ -1257,7 +1289,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deliveryTime: '20-40 min',
       minOrder: 0,
       address: data.address.trim(),
-      coordinates: DEFAULT_CENTER_COORDS,
+      city: data.city?.trim() || inferredCity.city,
+      state: data.state?.trim() || inferredCity.state,
+      coordinates: sanitized.coordinates,
       logo: data.logo || (isSponsor ? '⭐' : '🏢'),
       bannerImage: data.banner || 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=1200&q=80',
       description: data.description || (isSponsor ? 'Patrocinador oficial y aliado estratégico de ConForce.' : 'Comercio oficial afiliado a ConForce Marketplace.'),
@@ -1349,6 +1383,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     businessName: string;
     category: string;
     address: string;
+    coordinates?: Coordinates;
+    city?: string;
+    state?: string;
     logo?: string;
     banner?: string;
     phone: string;
@@ -1365,6 +1402,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const isSponsor = Boolean(data.isSponsor);
     const newBizId = isSponsor ? `biz-sponsor-${Date.now()}` : `biz-${Date.now()}`;
+    const inferredCity = guessVenezuelaCityFromText([data.city, data.state, data.address].filter(Boolean).join(' '));
+    const sanitized = sanitizeBusinessCoordinates(data.coordinates, data.address, data.city, data.state);
 
     const newBusiness: Business = {
       id: newBizId,
@@ -1375,7 +1414,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deliveryTime: '20-40 min',
       minOrder: 0,
       address: data.address.trim(),
-      coordinates: DEFAULT_CENTER_COORDS,
+      city: data.city?.trim() || inferredCity.city,
+      state: data.state?.trim() || inferredCity.state,
+      coordinates: sanitized.coordinates,
       logo: data.logo || (isSponsor ? '⭐' : '🏢'),
       bannerImage: data.banner || 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=1200&q=80',
       description: data.description || (isSponsor ? 'Patrocinador oficial y aliado estratégico de ConForce.' : 'Comercio oficial afiliado a ConForce Marketplace.'),
@@ -1993,11 +2034,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('mk_failed_searches', JSON.stringify(failedSearches));
   }, [failedSearches]);
 
-  // Location State (Default: Caracas, Venezuela 10.4806, -66.9036)
-  const [userLocation, setUserLocation] = useState<Coordinates | null>(DEFAULT_CENTER_COORDS);
-  const [userAddressLabel, setUserAddressLabel] = useState<string>('Caracas, Distrito Capital (Venezuela)');
+  // Location State (Default: Caracas, Venezuela 10.4806, -66.9036, or saved Venezuelan city)
+  const [userLocation, setUserLocation] = useState<Coordinates | null>(() => {
+    try {
+      const saved = localStorage.getItem('mk_user_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          parsed &&
+          typeof parsed.lat === 'number' &&
+          typeof parsed.lng === 'number' &&
+          !isMexicoCoords(parsed.lat, parsed.lng)
+        ) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_CENTER_COORDS;
+  });
+  const [userAddressLabel, setUserAddressLabel] = useState<string>(() => {
+    try {
+      const savedLabel = localStorage.getItem('mk_user_address_label');
+      if (savedLabel && !savedLabel.toLowerCase().includes('méxico') && !savedLabel.toLowerCase().includes('mexico')) {
+        return savedLabel;
+      }
+    } catch {}
+    return 'Caracas, Distrito Capital (Venezuela)';
+  });
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locationPermissionStatus, setLocationPermissionStatus] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('prompt');
+  const [locationFeedback, setLocationFeedback] = useState<{
+    type: 'info' | 'warning' | 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState<boolean>(false);
+  const clearLocationFeedback = () => setLocationFeedback(null);
 
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(() => {
     const isNotMexico = (addr: SavedAddress) =>
@@ -2269,44 +2340,114 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Request & Auto-Detect Geolocation on Mount
+  // Request & Auto-Detect Geolocation on Mount (respect manual city choice if saved)
   useEffect(() => {
-    detectUserLocation();
+    const manualChoice = localStorage.getItem('mk_user_location_manual') === 'true';
+    if (!manualChoice) {
+      detectUserLocation(false);
+    }
   }, []);
 
-  const detectUserLocation = () => {
-    if (!navigator.geolocation) {
+  const persistUserLocation = (coords: Coordinates, label: string, isManual: boolean) => {
+    setUserLocation(coords);
+    setUserAddressLabel(label);
+    try {
+      localStorage.setItem('mk_user_location', JSON.stringify(coords));
+      localStorage.setItem('mk_user_address_label', label);
+      localStorage.setItem('mk_user_location_manual', isManual ? 'true' : 'false');
+    } catch {}
+  };
+
+  const detectUserLocation = (manualTrigger = true) => {
+    const handleFallback = async (reasonMsg: string) => {
+      // Try automatic IP-based Venezuelan city detection (key-free)
+      const ipCity = await detectIpLocationVenezuela();
+      if (ipCity) {
+        const ipCoords = { lat: ipCity.lat, lng: ipCity.lng };
+        persistUserLocation(ipCoords, ipCity.label, false);
+        setLocationPermissionStatus('denied');
+        setIsLocating(false);
+        setLocationFeedback({
+          type: 'warning',
+          message: `${reasonMsg} Se estimó tu ciudad por conexión de red (${ipCity.city}, ${ipCity.state}). Puedes ajustarla manualmente si es necesario.`
+        });
+        return;
+      }
+
+      // If IP fallback could not resolve Venezuela (or VPN/proxy), keep current saved city or Caracas
+      const currentValid =
+        userLocation && isInsideVenezuela(userLocation.lat, userLocation.lng)
+          ? userLocation
+          : DEFAULT_CENTER_COORDS;
+      const keepLabel =
+        userLocation && isInsideVenezuela(userLocation.lat, userLocation.lng) && userAddressLabel
+          ? userAddressLabel
+          : 'Caracas, Distrito Capital (Venezuela)';
+
+      persistUserLocation(currentValid, keepLabel, false);
       setLocationPermissionStatus('denied');
-      setUserLocation(DEFAULT_CENTER_COORDS);
+      setIsLocating(false);
+
+      if (manualTrigger) {
+        setLocationFeedback({
+          type: 'warning',
+          message: `${reasonMsg} Selecciona tu ciudad en Venezuela para calcular las distancias exactas.`
+        });
+        setIsLocationPickerOpen(true);
+      }
+    };
+
+    if (!navigator.geolocation) {
+      setIsLocating(true);
+      handleFallback('Tu navegador o dispositivo no soporta geolocalización GPS.');
       return;
     }
 
     setIsLocating(true);
+    if (manualTrigger) {
+      setLocationFeedback(null);
+    }
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const coords = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude
         };
-        setUserLocation(coords);
-        setUserAddressLabel('GPS: Tu ubicación actual en tiempo real');
         setLocationPermissionStatus('granted');
+        const resolvedLabel = await reverseGeocodeVenezuela(coords.lat, coords.lng);
+        persistUserLocation(coords, resolvedLabel, false);
         setIsLocating(false);
+        if (manualTrigger) {
+          setLocationFeedback({
+            type: 'success',
+            message: `Ubicación GPS actualizada: ${resolvedLabel}`
+          });
+        }
       },
-      (_err) => {
-        // Fallback to Caracas, Venezuela default coordinates smoothly
-        setUserLocation(DEFAULT_CENTER_COORDS);
-        setUserAddressLabel('Caracas, Distrito Capital (Venezuela)');
-        setLocationPermissionStatus('denied');
-        setIsLocating(false);
+      (err) => {
+        const reason =
+          err?.code === 1
+            ? 'El teléfono o navegador no tiene permiso de ubicación GPS activado.'
+            : err?.code === 3
+              ? 'El GPS tardó demasiado en responder.'
+              : 'No se pudo obtener la señal GPS del dispositivo.';
+        handleFallback(reason);
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: manualTrigger ? 0 : 60000
+      }
     );
   };
 
   const setUserCustomLocation = (coords: Coordinates, label: string) => {
-    setUserLocation(coords);
-    setUserAddressLabel(label);
+    persistUserLocation(coords, label, true);
+    setLocationFeedback({
+      type: 'success',
+      message: `Ubicación fijada en ${label}. Distancias recalculadas.`
+    });
   };
 
   // Distance calculation in Kilometers (Haversine formula)
@@ -3202,6 +3343,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userAddressLabel,
         isLocating,
         locationPermissionStatus,
+        locationFeedback,
+        clearLocationFeedback,
+        isLocationPickerOpen,
+        setIsLocationPickerOpen,
         detectUserLocation,
         setUserCustomLocation,
         savedAddresses,

@@ -12,6 +12,7 @@ import {
   Role,
   DriverProfile
 } from '../types';
+import { sanitizeBusinessCoordinates } from '../utils/venezuelaGeo';
 
 // Supabase Configuration from User Credentials
 const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -46,6 +47,13 @@ export function mapBusinessFromDB(row: any): Business {
     (Array.isArray(row.tags) && row.tags.some((t: string) => typeof t === 'string' && (t.toLowerCase().includes('patrocinad') || t.toLowerCase().includes('sponsor'))))
   );
 
+  const sanitized = sanitizeBusinessCoordinates(
+    row.coordinates,
+    row.address,
+    row.city,
+    row.state
+  );
+
   return {
     id: row.id,
     name: row.name,
@@ -56,7 +64,7 @@ export function mapBusinessFromDB(row: any): Business {
     phone: row.phone || '',
     whatsapp: row.whatsapp || undefined,
     address: row.address || '',
-    coordinates: row.coordinates || { lat: 10.4806, lng: -66.9036 },
+    coordinates: sanitized.coordinates,
     openingHours: row.opening_hours || '08:00 AM - 07:00 PM',
     rating: Number(row.rating ?? 5.0),
     reviewsCount: Number(row.reviews_count ?? 0),
@@ -460,6 +468,25 @@ export async function fetchBusinessesFromSupabase(): Promise<Business[] | null> 
   try {
     const { data, error } = await supabase.from('businesses').select('*').order('name');
     if (error || !data) return null;
+
+    // Auto-repair stale Mexico/invalid coordinates in Supabase in background
+    data.forEach((row: any) => {
+      const check = sanitizeBusinessCoordinates(row.coordinates, row.address, row.city, row.state);
+      if (check.wasRepaired && row.id) {
+        supabase
+          .from('businesses')
+          .update({ coordinates: check.coordinates })
+          .eq('id', row.id)
+          .then(({ error: updErr }) => {
+            if (updErr) {
+              console.warn(`Could not auto-repair coordinates for business ${row.id}:`, updErr.message);
+            } else {
+              console.info(`Repaired stale coordinates in Supabase for business "${row.name}" -> [${check.coordinates.lat}, ${check.coordinates.lng}]`);
+            }
+          });
+      }
+    });
+
     return data.map(mapBusinessFromDB);
   } catch (err) {
     console.warn('Error fetching businesses from Supabase:', err);

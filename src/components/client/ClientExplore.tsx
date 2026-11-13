@@ -22,7 +22,9 @@ import {
   Share2,
   User,
   ShieldCheck,
-  Bike
+  Bike,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../../utils/urlUtils';
 
@@ -46,6 +48,10 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
     userAddressLabel,
     detectUserLocation,
     isLocating,
+    locationPermissionStatus,
+    locationFeedback,
+    clearLocationFeedback,
+    setIsLocationPickerOpen,
     addToCart,
     cart,
     cartSubtotal,
@@ -211,44 +217,102 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
   return (
     <div className="space-y-4 pb-24 md:pb-12 max-w-3xl mx-auto px-3 sm:px-4 bg-white">
       
-      {/* 1. Minimalist Geolocation Bar with Direct Map Access Button */}
-      <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-2xs">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-[#D4021D] text-white flex items-center justify-center shrink-0 shadow-2xs">
-            <MapPin className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs sm:text-sm text-slate-800 font-bold truncate">
-              {userAddressLabel || 'Ubicación actual'}
-            </p>
-            <p className="text-[10px] text-slate-600 font-semibold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#D4021D] inline-block" />
-              <span>Ordenado por cercanía GPS</span>
-            </p>
+      {/* 1. Minimalist Geolocation Bar with City Picker & Direct Map Access Button */}
+      <div className="space-y-2">
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setIsLocationPickerOpen(true)}
+            className="flex items-center gap-2 min-w-0 text-left hover:opacity-85 transition-opacity cursor-pointer"
+            title="Cambiar ciudad o dirección en Venezuela"
+          >
+            <div className="w-8 h-8 rounded-xl bg-[#D4021D] text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-slate-800 font-bold truncate">
+                {userAddressLabel || 'Ubicación actual'}
+              </p>
+              <p className="text-[10px] text-slate-600 font-semibold flex items-center gap-1">
+                <span>
+                  {locationPermissionStatus === 'denied'
+                    ? 'GPS bloqueado · Toca para elegir tu ciudad'
+                    : 'Ordenado por cercanía · Toca para cambiar ciudad'}
+                </span>
+              </p>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => detectUserLocation(true)}
+              disabled={isLocating}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              title="Detectar ubicación GPS o elegir ciudad"
+            >
+              <LocateFixed className={`w-3.5 h-3.5 text-[#D4021D] ${isLocating ? 'animate-spin' : ''}`} />
+              <span>{isLocating ? 'GPS...' : 'Actualizar'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsLocationPickerOpen(true)}
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              title="Seleccionar ciudad en Venezuela"
+            >
+              <span>Ciudad</span>
+            </button>
+
+            {/* Dedicated Button to View Map Module */}
+            <button
+              type="button"
+              onClick={handleGoToMap}
+              className="flex items-center gap-1 px-3 py-1.5 bg-[#D4021D] hover:bg-[#b50218] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+              title="Ver ubicación de todas las tiendas en el mapa"
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Ver Mapa</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={detectUserLocation}
-            disabled={isLocating}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            title="Recalcular distancia GPS"
+        {/* Location Status Feedback Banner */}
+        {locationFeedback && (
+          <div
+            className={`px-3 py-2 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+              locationFeedback.type === 'warning' || locationFeedback.type === 'error'
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : locationFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}
           >
-            <LocateFixed className={`w-3.5 h-3.5 text-[#D4021D] ${isLocating ? 'animate-spin' : ''}`} />
-            <span>{isLocating ? 'GPS...' : 'Actualizar'}</span>
-          </button>
-
-          {/* Dedicated Button to View Map Module */}
-          <button
-            onClick={handleGoToMap}
-            className="flex items-center gap-1 px-3 py-1.5 bg-[#D4021D] hover:bg-[#b50218] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
-            title="Ver ubicación de todas las tiendas en el mapa"
-          >
-            <MapIcon className="w-3.5 h-3.5" />
-            <span>Ver Mapa</span>
-          </button>
-        </div>
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+              <span className="font-medium leading-snug">{locationFeedback.message}</span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {locationPermissionStatus === 'denied' && (
+                <button
+                  type="button"
+                  onClick={() => setIsLocationPickerOpen(true)}
+                  className="px-2.5 py-1 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-lg text-[11px] font-bold cursor-pointer"
+                >
+                  Elegir ciudad
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={clearLocationFeedback}
+                className="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
+                aria-label="Cerrar aviso"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
 

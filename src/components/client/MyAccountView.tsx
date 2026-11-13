@@ -43,6 +43,7 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
     detectUserLocation,
     isLocating,
     locationPermissionStatus,
+    setIsLocationPickerOpen,
     savedAddresses,
     addSavedAddress,
     deleteSavedAddress,
@@ -274,14 +275,26 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
           )}
         </p>
 
-        <button
-          onClick={detectUserLocation}
-          disabled={isLocating}
-          className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
-        >
-          <LocateFixed className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
-          <span>{isLocating ? 'Detectando GPS...' : 'Actualizar Coordenadas Reales'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => detectUserLocation(true)}
+            disabled={isLocating}
+            className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+          >
+            <LocateFixed className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+            <span>{isLocating ? 'Detectando GPS...' : 'Actualizar Coordenadas Reales'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsLocationPickerOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 hover:bg-red-100 text-[#D4021D] border border-red-200 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            <span>Elegir Ciudad en Venezuela</span>
+          </button>
+        </div>
       </div>
 
       {/* Frequent Saved Addresses */}

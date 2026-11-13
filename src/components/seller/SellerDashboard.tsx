@@ -188,6 +188,22 @@ export const SellerDashboard: React.FC = () => {
   };
 
   const handleUseCurrentGps = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setBizLat(Number(pos.coords.latitude.toFixed(6)));
+          setBizLng(Number(pos.coords.longitude.toFixed(6)));
+        },
+        () => {
+          if (userLocation) {
+            setBizLat(userLocation.lat);
+            setBizLng(userLocation.lng);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 7000 }
+      );
+      return;
+    }
     if (userLocation) {
       setBizLat(userLocation.lat);
       setBizLng(userLocation.lng);
@@ -925,20 +941,67 @@ export const SellerDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* GPS Coords with auto-detect button */}
-            <div className="md:col-span-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between">
+            {/* GPS Coords with Venezuelan City selector, OSM geocoder, and real GPS button */}
+            <div className="md:col-span-2 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-bold text-slate-900 flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-[#D4021D]" />
-                  Coordenadas Exactas en el Mapa (Lat / Lng)
+                  Coordenadas Exactas en el Mapa (Venezuela)
                 </span>
-                <button
-                  type="button"
-                  onClick={handleUseCurrentGps}
-                  className="flex items-center gap-1 text-[11px] text-[#D4021D] hover:text-[#b50218] font-bold cursor-pointer"
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!bizAddress.trim()) return;
+                      const { geocodeVenezuelaAddress } = await import('../../utils/venezuelaGeo');
+                      const res = await geocodeVenezuelaAddress(bizAddress);
+                      setBizLat(Number(res.lat.toFixed(6)));
+                      setBizLng(Number(res.lng.toFixed(6)));
+                    }}
+                    className="flex items-center gap-1 text-[11px] bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 px-2.5 py-1 rounded-lg font-bold cursor-pointer"
+                  >
+                    Ubicar por dirección
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentGps}
+                    className="flex items-center gap-1 text-[11px] text-[#D4021D] hover:text-[#b50218] font-bold cursor-pointer"
+                  >
+                    <LocateFixed className="w-3.5 h-3.5" /> Usar mi GPS actual
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-600 text-[10px] font-bold uppercase block mb-1">
+                  Selección rápida de ciudad en Venezuela:
+                </label>
+                <select
+                  onChange={async (e) => {
+                    const { VENEZUELAN_CITIES } = await import('../../utils/venezuelaGeo');
+                    const found = VENEZUELAN_CITIES.find((c) => c.name === e.target.value);
+                    if (found) {
+                      setBizLat(found.lat);
+                      setBizLng(found.lng);
+                    }
+                  }}
+                  defaultValue=""
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 text-xs focus:outline-none focus:border-[#D4021D]"
                 >
-                  <LocateFixed className="w-3.5 h-3.5" /> Usar mi GPS actual
-                </button>
+                  <option value="" disabled>
+                    Elegir ciudad (ej. San Felipe, Yaracuy, Caracas, Valencia...)
+                  </option>
+                  <option value="San Felipe (Yaracuy)">San Felipe (Yaracuy)</option>
+                  <option value="Caracas (Distrito Capital)">Caracas (Distrito Capital)</option>
+                  <option value="Barquisimeto (Lara)">Barquisimeto (Lara)</option>
+                  <option value="Valencia (Carabobo)">Valencia (Carabobo)</option>
+                  <option value="Maracay (Aragua)">Maracay (Aragua)</option>
+                  <option value="Maracaibo (Zulia)">Maracaibo (Zulia)</option>
+                  <option value="Lechería / Puerto La Cruz (Anzoátegui)">Lechería / Puerto La Cruz (Anzoátegui)</option>
+                  <option value="Mérida (Mérida)">Mérida (Mérida)</option>
+                  <option value="San Cristóbal (Táchira)">San Cristóbal (Táchira)</option>
+                  <option value="Puerto Ordaz / Ciudad Guayana (Bolívar)">Puerto Ordaz / Ciudad Guayana (Bolívar)</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
