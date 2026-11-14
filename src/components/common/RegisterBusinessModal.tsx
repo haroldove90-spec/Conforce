@@ -16,10 +16,13 @@ import {
   Award,
   Crown,
   LocateFixed,
-  Navigation
+  Navigation,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PasswordInput } from './PasswordInput';
+import { compressAndEncodeImage } from '../../utils/imageUtils';
 import {
   VENEZUELAN_CITIES,
   findNearestVenezuelanCity,
@@ -60,6 +63,9 @@ export const RegisterBusinessModal: React.FC = () => {
   const [rifOrNit, setRifOrNit] = useState('');
   const [description, setDescription] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('🏢');
+  const [bannerImage, setBannerImage] = useState('');
+  const [isProcessingBanner, setIsProcessingBanner] = useState(false);
+  const bannerInputRef = React.useRef<HTMLInputElement>(null);
 
   // Owner Form State (if not logged in as client)
   const [ownerName, setOwnerName] = useState('');
@@ -92,6 +98,8 @@ export const RegisterBusinessModal: React.FC = () => {
       setGeoHint('');
       setGeoWarning('');
       setHasCustomPin(false);
+      setBannerImage('');
+      setIsProcessingBanner(false);
     }
   }, [isRegisterBusinessModalOpen, isRegisteringAsSponsor]);
 
@@ -140,6 +148,7 @@ export const RegisterBusinessModal: React.FC = () => {
           rifOrNit,
           description,
           logo: selectedEmoji,
+          banner: bannerImage || undefined,
           isSponsor
         });
 
@@ -186,6 +195,7 @@ export const RegisterBusinessModal: React.FC = () => {
           rifOrNit,
           description,
           logo: selectedEmoji,
+          banner: bannerImage || undefined,
           ownerName,
           username,
           email,
@@ -559,6 +569,73 @@ export const RegisterBusinessModal: React.FC = () => {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Foto o Portada de tu Negocio (Opcional)
+                </label>
+                <input
+                  type="file"
+                  ref={bannerInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    setIsProcessingBanner(true);
+                    setErrorMsg('');
+                    try {
+                      const compressed = await compressAndEncodeImage(file, 1200, 700, 0.8);
+                      setBannerImage(compressed);
+                    } catch (err: any) {
+                      setErrorMsg(err?.message || 'No se pudo procesar la foto del local.');
+                    } finally {
+                      setIsProcessingBanner(false);
+                    }
+                  }}
+                />
+                {bannerImage ? (
+                  <div className="flex items-center gap-3 p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
+                    <img
+                      src={bannerImage}
+                      alt="Portada del negocio"
+                      className="w-20 h-14 rounded-lg object-cover border border-gray-200 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-gray-800 truncate">Foto del negocio lista</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => bannerInputRef.current?.click()}
+                          className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
+                        >
+                          Cambiar foto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBannerImage('')}
+                          className="text-[11px] font-bold text-gray-500 hover:text-red-600 cursor-pointer"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isProcessingBanner}
+                    onClick={() => bannerInputRef.current?.click()}
+                    className="w-full py-2.5 px-3 border border-dashed border-gray-300 hover:border-red-500 rounded-xl bg-gray-50 hover:bg-red-50/30 flex items-center justify-center gap-2 text-xs font-bold text-gray-700 cursor-pointer disabled:opacity-60"
+                  >
+                    <ImageIcon className="w-4 h-4 text-red-600" />
+                    <span>
+                      {isProcessingBanner ? 'Optimizando foto...' : 'Subir foto real de tu tienda o logo (Cámara / Galería)'}
+                    </span>
+                  </button>
+                )}
               </div>
 
               <div className="md:col-span-2">

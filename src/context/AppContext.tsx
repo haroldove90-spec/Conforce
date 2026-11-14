@@ -49,6 +49,7 @@ import {
   upsertBusinessInSupabase,
   deleteBusinessInSupabase,
   upsertProductInSupabase,
+  upsertProductInSupabaseDetailed,
   deleteProductInSupabase,
   insertOrderInSupabase,
   updateOrderStatusInSupabase,
@@ -68,6 +69,7 @@ import {
   upsertDriverInSupabase
 } from '../services/supabaseClient';
 import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../utils/urlUtils';
+import { buildSafeBusinessBanner } from '../utils/imageUtils';
 import {
   sanitizeBusinessCoordinates,
   isMexicoCoords,
@@ -76,6 +78,16 @@ import {
   detectIpLocationVenezuela,
   guessVenezuelaCityFromText
 } from '../utils/venezuelaGeo';
+
+const safeSetLocalStorage = (key: string, value: string): boolean => {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    console.warn(`No se pudo guardar "${key}" en almacenamiento local (límite alcanzado):`, err);
+    return false;
+  }
+};
 
 export interface PendingProductOrder {
   productName: string;
@@ -120,8 +132,8 @@ interface AppContextType {
 
   // Products
   products: Product[];
-  addProduct: (prod: Omit<Product, 'id'>) => void;
-  updateProduct: (id: string, updates: Partial<Product>) => void;
+  addProduct: (prod: Omit<Product, 'id'>) => Promise<{ success: boolean; supabaseSynced: boolean; message?: string }>;
+  updateProduct: (id: string, updates: Partial<Product>) => Promise<{ success: boolean; supabaseSynced: boolean; message?: string }>;
   deleteProduct: (id: string) => void;
   toggleOfferOfTheDay: (productId: string) => void;
 
@@ -147,8 +159,8 @@ interface AppContextType {
       kitchenNotes?: string;
     }
   ) => void;
-  removeFromCart: (productId: string) => void;
-  updateCartQuantity: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string, cartIndex?: number) => void;
+  updateCartQuantity: (productId: string, quantity: number, cartIndex?: number) => void;
   clearCart: () => void;
   cartSubtotal: number;
   cartSubtotalUsd: number;
@@ -759,7 +771,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isMarketplaceRoute = currentRoute === 'marketplace';
 
-  // Synchronize on initial mount with URL query parameters
+  // Synchronize on initial mount with URL query parameters (never auto-login admin without credentials)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const search = window.location.search.toLowerCase();
@@ -767,15 +779,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hash = window.location.hash.toLowerCase();
 
       if (search.includes('role=admin') || search.includes('view=admin') || path.includes('/admin') || hash.includes('admin')) {
-        setCurrentRole('admin');
-        setActiveAdminTab('overview');
-        if (!currentUser || currentUser.role !== 'admin') {
-          const harold = INITIAL_USERS.find(u => u.username === 'haroldo90');
-          if (harold) setCurrentUser(harold);
+        if (currentUser?.role === 'admin') {
+          setCurrentRole('admin');
+          setActiveAdminTab('overview');
+        } else {
+          setCorporateAuthInitialTab('admin');
+          setIsCorporateAuthModalOpen(true);
         }
       } else if (search.includes('role=seller') || search.includes('view=seller') || path.includes('/seller') || hash.includes('seller')) {
-        setCurrentRole('seller');
-        setActiveSellerTab('orders');
+        if (currentUser?.role === 'seller') {
+          setCurrentRole('seller');
+          setActiveSellerTab('orders');
+        } else {
+          setCorporateAuthInitialTab('seller');
+          setIsCorporateAuthModalOpen(true);
+        }
       }
     }
   }, []);
@@ -1054,15 +1072,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (user.role === 'seller') {
       setCurrentUser(user);
       setCurrentRole('seller');
+      if (user.businessId) {
+        setSelectedBusinessId(user.businessId);
+      }
       setActiveSellerTab('orders');
       setIsClientAuthModalOpen(false);
-      try {
-        localStorage.setItem('mk_current_user', JSON.stringify(user));
-        localStorage.setItem('mk_current_role', 'seller');
-      } catch (e) {}
+      safeSetLocalStorage('mk_current_user', JSON.stringify(user));
+      safeSetLocalStorage('mk_current_role', 'seller');
       return {
         success: true,
         message: `¡Bienvenido ${user.name}! Redirigiendo al Portal de Negocios...`,
+        user
+      };
+    }
+
+    if (user.role === 'driver') {
+      setCurrentUser(user);
+      setCurrentRole('driver');
+      setActiveDriverTab('deliveries');
+      setIsClientAuthModalOpen(false);
+      safeSetLocalStorage('mk_current_user', JSON.stringify(user));
+      safeSetLocalStorage('mk_current_role', 'driver');
+      return {
+        success: true,
+        message: `¡Bienvenido ${user.name}! Redirigiendo a tu Panel de Mensajero...`,
         user
       };
     }
@@ -1300,7 +1333,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       state: data.state?.trim() || inferredCity.state,
       coordinates: sanitized.coordinates,
       logo: data.logo || (isSponsor ? '⭐' : '🏢'),
-      bannerImage: data.banner || 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=1200&q=80',
+      bannerImage: data.banner || buildSafeBusinessBanner(data.businessName, data.category),
       description: data.description || (isSponsor ? 'Patrocinador oficial y aliado estratégico de ConForce.' : 'Comercio oficial afiliado a ConForce Marketplace.'),
       phone: data.phone.trim(),
       tags: [
@@ -1425,7 +1458,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       state: data.state?.trim() || inferredCity.state,
       coordinates: sanitized.coordinates,
       logo: data.logo || (isSponsor ? '⭐' : '🏢'),
-      bannerImage: data.banner || 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=1200&q=80',
+      bannerImage: data.banner || buildSafeBusinessBanner(data.businessName, data.category),
       description: data.description || (isSponsor ? 'Patrocinador oficial y aliado estratégico de ConForce.' : 'Comercio oficial afiliado a ConForce Marketplace.'),
       phone: data.phone.trim(),
       tags: [
@@ -2149,13 +2182,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const finalBiz = isCleared
             ? remoteBiz.filter((b) => !MOCK_BUSINESS_IDS.has(b.id))
             : remoteBiz;
-          setBusinesses(finalBiz);
+          setBusinesses((prev) => {
+            const remoteMap = new Map<string, Business>();
+            finalBiz.forEach((b) => remoteMap.set(b.id, b));
+            const localUnsynced = prev.filter(
+              (b) => !remoteMap.has(b.id) && !(isCleared && MOCK_BUSINESS_IDS.has(b.id))
+            );
+            localUnsynced.forEach((b) => {
+              upsertBusinessInSupabase(b).catch(() => {});
+            });
+            return [...localUnsynced, ...finalBiz];
+          });
         }
         if (remoteProd) {
           const finalProd = isCleared
             ? remoteProd.filter((p) => !MOCK_PRODUCT_IDS.has(p.id))
             : remoteProd;
-          setProducts(finalProd);
+          setProducts((prev) => {
+            const remoteMap = new Map<string, Product>();
+            finalProd.forEach((p) => remoteMap.set(p.id, p));
+            const localUnsynced = prev.filter(
+              (p) => !remoteMap.has(p.id) && !(isCleared && MOCK_PRODUCT_IDS.has(p.id))
+            );
+            localUnsynced.forEach((p) => {
+              upsertProductInSupabase(p).catch(() => {});
+            });
+            return [...localUnsynced, ...finalProd];
+          });
         }
         if (remoteDrivers) {
           const finalDrivers = isCleared
@@ -2254,33 +2307,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAppInstalled, setIsAppInstalled] = useState<boolean>(false);
   const [showInstallBanner, setShowInstallBanner] = useState<boolean>(true);
 
-  // Save to localStorage on change
+  // Save to localStorage on change safely (prevents QuotaExceededError crashes)
   useEffect(() => {
-    localStorage.setItem('mk_businesses', JSON.stringify(businesses));
+    safeSetLocalStorage('mk_businesses', JSON.stringify(businesses));
   }, [businesses]);
 
   useEffect(() => {
-    localStorage.setItem('mk_products', JSON.stringify(products));
+    safeSetLocalStorage('mk_products', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('mk_orders', JSON.stringify(orders));
+    safeSetLocalStorage('mk_orders', JSON.stringify(orders));
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('mk_cart', JSON.stringify(cart));
+    safeSetLocalStorage('mk_cart', JSON.stringify(cart));
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('mk_chatbot_config', JSON.stringify(chatbotConfig));
+    safeSetLocalStorage('mk_chatbot_config', JSON.stringify(chatbotConfig));
   }, [chatbotConfig]);
 
   useEffect(() => {
-    localStorage.setItem('mk_campaigns', JSON.stringify(campaigns));
+    safeSetLocalStorage('mk_campaigns', JSON.stringify(campaigns));
   }, [campaigns]);
 
   useEffect(() => {
-    localStorage.setItem('mk_saved_addresses', JSON.stringify(savedAddresses));
+    safeSetLocalStorage('mk_saved_addresses', JSON.stringify(savedAddresses));
   }, [savedAddresses]);
 
   // Deep Link URL & /marketplace Route Parser
@@ -2659,22 +2712,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Product CRUD
-  const addProduct = (prodData: Omit<Product, 'id'>) => {
+  const addProduct = async (prodData: Omit<Product, 'id'>) => {
     const newProd: Product = {
       ...prodData,
-      id: `prod-${Date.now()}`
+      id: `prod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     };
     setProducts(prev => [newProd, ...prev]);
-    upsertProductInSupabase(newProd);
+    const res = await upsertProductInSupabaseDetailed(newProd);
+    return { success: true, supabaseSynced: res.success, message: res.message };
   };
 
-  const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts(prev => {
-      const updated = prev.map(p => (p.id === id ? { ...p, ...updates } : p));
-      const target = updated.find(p => p.id === id);
-      if (target) upsertProductInSupabase(target);
-      return updated;
-    });
+  const updateProduct = async (id: string, updates: Partial<Product>) => {
+    const existing = products.find(p => p.id === id);
+    const updatedTarget: Product | undefined = existing ? { ...existing, ...updates } : undefined;
+    setProducts(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
+    if (updatedTarget) {
+      const res = await upsertProductInSupabaseDetailed(updatedTarget);
+      return { success: true, supabaseSynced: res.success, message: res.message };
+    }
+    return { success: false, supabaseSynced: false, message: 'Producto no encontrado' };
   };
 
   const deleteProduct = (id: string) => {
@@ -3027,19 +3083,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
+  const removeFromCart = (productId: string, cartIndex?: number) => {
+    setCart(prev =>
+      typeof cartIndex === 'number'
+        ? prev.filter((_, idx) => idx !== cartIndex)
+        : prev.filter(item => item.product.id !== productId)
+    );
   };
 
-  const updateCartQuantity = (productId: string, quantity: number) => {
+  const updateCartQuantity = (productId: string, quantity: number, cartIndex?: number) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(productId, cartIndex);
       return;
     }
     setCart(prev =>
-      prev.map(item =>
-        item.product.id === productId ? { ...item, quantity } : item
-      )
+      prev.map((item, idx) => {
+        if (typeof cartIndex === 'number') {
+          return idx === cartIndex ? { ...item, quantity } : item;
+        }
+        return item.product.id === productId ? { ...item, quantity } : item;
+      })
     );
   };
 

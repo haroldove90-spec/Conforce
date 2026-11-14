@@ -4,6 +4,7 @@ import { Business, BusinessCategory, Product } from '../../types';
 import { getBusinessScheduleStatus } from '../../utils/scheduleUtils';
 import { ProductSearchComparator } from './ProductSearchComparator';
 import { CurrencySelector } from '../common/CurrencySelector';
+import { resolveProductImage, buildSafeProductPlaceholder } from '../../utils/imageUtils';
 import {
   Search,
   Star,
@@ -672,8 +673,11 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
                   {/* Left: Square Product Photo */}
                   <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-100">
                     <img
-                      src={prod.image}
+                      src={resolveProductImage(prod.image, prod.images, prod.name)}
                       alt={prod.name}
+                      onError={(e) => {
+                        e.currentTarget.src = buildSafeProductPlaceholder(prod.name);
+                      }}
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />

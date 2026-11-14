@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DeliveryType, PaymentMethod, OrderChannel } from '../../types';
 import confetti from 'canvas-confetti';
-import { formatVenezuelanWhatsAppNumber, openWhatsAppDirect } from '../../utils/urlUtils';
+import { openWhatsAppDirect } from '../../utils/urlUtils';
+import { resolveProductImage, buildSafeProductPlaceholder } from '../../utils/imageUtils';
 import {
   X,
   Trash2,
@@ -68,6 +69,7 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
   const [customerPhone, setCustomerPhone] = useState<string>(currentUser?.phone || '+58 412 1234567');
   const [orderNotes, setOrderNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [pendingAuthChannel, setPendingAuthChannel] = useState<OrderChannel | null>(null);
 
   // Sync user details if user signs in or registers while drawer is open
   React.useEffect(() => {
@@ -81,9 +83,20 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
     }
   }, [currentUser]);
 
+  // Resume checkout automatically once the user completes login/registration
+  React.useEffect(() => {
+    if (isOpen && currentUser && pendingAuthChannel && cart.length > 0 && !isSubmitting) {
+      const channel = pendingAuthChannel;
+      setPendingAuthChannel(null);
+      handlePlaceOrder(channel);
+    }
+  }, [currentUser, isOpen, pendingAuthChannel]);
+
   if (!isOpen) return null;
 
-  // Find business from first cart item
+  // Group cart items by business so multi-store carts never mix orders
+  const businessIdsInCart = Array.from(new Set(cart.map((i) => i.businessId).filter(Boolean)));
+  const hasMultipleBusinesses = businessIdsInCart.length > 1;
   const primaryBusinessId = cart[0]?.businessId;
   const targetBusiness = businesses.find((b) => b.id === primaryBusinessId);
 
@@ -122,13 +135,22 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
     }
   };
 
-  const buildWhatsAppMessage = () => {
-    const bizName = targetBusiness?.name || 'Comercio';
+  const buildWhatsAppMessage = (
+    itemsSubset = cart,
+    bizTarget = targetBusiness
+  ) => {
+    const bizName = bizTarget?.name || 'Comercio';
     const address = getResolvedAddress();
-    const grandTotalUsd = exchangeRateUsd > 0 ? (grandTotal / exchangeRateUsd).toFixed(2) : undefined;
-    const subtotalUsd = exchangeRateUsd > 0 ? (cartSubtotal / exchangeRateUsd).toFixed(2) : undefined;
+    const subsetSubtotal = itemsSubset.reduce(
+      (s, item) => s + (item.itemTotalBs ?? item.product.price) * item.quantity,
+      0
+    );
+    const subsetServiceFee = subsetSubtotal > 0 ? Math.max(10, Math.round(subsetSubtotal * 0.05)) : 0;
+    const subsetTotal = subsetSubtotal + deliveryFee + subsetServiceFee;
+    const grandTotalUsd = exchangeRateUsd > 0 ? (subsetTotal / exchangeRateUsd).toFixed(2) : undefined;
+    const subtotalUsd = exchangeRateUsd > 0 ? (subsetSubtotal / exchangeRateUsd).toFixed(2) : undefined;
 
-    const itemsList = cart
+    const itemsList = itemsSubset
       .map((item) => {
         const itemUnitPrice = item.itemTotalBs ?? item.product.price;
         const itemLineTotal = itemUnitPrice * item.quantity;
@@ -158,10 +180,10 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
 ${itemsList}
 
 ─────────────────────────
-💵 *Subtotal:* Bs. ${cartSubtotal.toLocaleString('es-VE')}${subtotalUsd ? ` ($${subtotalUsd} USD)` : ''}
+💵 *Subtotal:* Bs. ${subsetSubtotal.toLocaleString('es-VE')}${subtotalUsd ? ` ($${subtotalUsd} USD)` : ''}
 🛵 *Costo Envío en Moto:* ${deliveryFee === 0 ? 'Gratis' : `Bs. ${deliveryFee.toLocaleString('es-VE')}`}
-🛡️ *Tarifa de Servicio (5%):* Bs. ${serviceFee.toLocaleString('es-VE')}
-💰 *TOTAL A PAGAR:* Bs. ${grandTotal.toLocaleString('es-VE')}${grandTotalUsd ? ` ($${grandTotalUsd} USD)` : ''}
+🛡️ *Tarifa de Servicio (5%):* Bs. ${subsetServiceFee.toLocaleString('es-VE')}
+💰 *TOTAL A PAGAR:* Bs. ${subsetTotal.toLocaleString('es-VE')}${grandTotalUsd ? ` ($${grandTotalUsd} USD)` : ''}
 ─────────────────────────
 💳 *Forma de Pago:* ${getPaymentMethodLabel(paymentMethod)}
 ${paymentReference.trim() ? `🔢 *Nro. de Referencia:* ${paymentReference.trim()}\n` : ''}${orderNotes.trim() ? `📝 *Instrucciones Especiales:* ${orderNotes.trim()}\n` : ''}
@@ -171,39 +193,63 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
   const handlePlaceOrder = (channelOverride?: OrderChannel) => {
     if (cart.length === 0 || !targetBusiness) return;
 
+    const channelToUse = channelOverride || checkoutChannel;
+
     // Si el usuario no ha iniciado sesión o no está registrado, abrir modal de autenticación de cliente
     if (!currentUser) {
+      setPendingAuthChannel(channelToUse);
       setClientAuthIntent('order_checkout');
       setIsClientAuthModalOpen(true);
       return;
     }
 
-    const channelToUse = channelOverride || checkoutChannel;
     const finalDeliveryAddress = getResolvedAddress();
-
     setIsSubmitting(true);
 
     setTimeout(() => {
-      const newOrder = createOrder({
-        businessId: targetBusiness.id,
-        businessName: targetBusiness.name,
-        businessLogo: targetBusiness.logo,
-        customerName: customerName.trim() || 'Cliente ConForce',
-        customerPhone: customerPhone.trim() || '+58 412 1234567',
-        items: [...cart],
-        subtotal: cartSubtotal,
-        deliveryFee,
-        serviceFee,
-        serviceFeeRate: 0.05,
-        total: grandTotal,
-        deliveryType,
-        deliveryAddress: finalDeliveryAddress,
-        deliveryCoordinates: userLocation || undefined,
-        paymentMethod,
-        paymentReference: paymentReference.trim() || undefined,
-        orderChannel: channelToUse,
-        status: 'preparing',
-        notes: orderNotes
+      const groupedByBiz = businessIdsInCart.map((bId) => ({
+        biz: businesses.find((b) => b.id === bId) || targetBusiness,
+        items: cart.filter((i) => i.businessId === bId)
+      }));
+
+      let lastOrderId = '';
+
+      groupedByBiz.forEach(({ biz: storeBiz, items: storeItems }) => {
+        const sub = storeItems.reduce(
+          (s, i) => s + (i.itemTotalBs ?? i.product.price) * i.quantity,
+          0
+        );
+        const svc = sub > 0 ? Math.max(10, Math.round(sub * 0.05)) : 0;
+        const tot = sub + deliveryFee + svc;
+
+        const created = createOrder({
+          businessId: storeBiz.id,
+          businessName: storeBiz.name,
+          businessLogo: storeBiz.logo,
+          customerName: customerName.trim() || currentUser.name || 'Cliente ConForce',
+          customerPhone: customerPhone.trim() || currentUser.phone || '+58 412 1234567',
+          items: [...storeItems],
+          subtotal: sub,
+          deliveryFee,
+          serviceFee: svc,
+          serviceFeeRate: 0.05,
+          total: tot,
+          deliveryType,
+          deliveryAddress: finalDeliveryAddress,
+          deliveryCoordinates: userLocation || undefined,
+          paymentMethod,
+          paymentReference: paymentReference.trim() || undefined,
+          orderChannel: channelToUse,
+          status: 'preparing',
+          notes: orderNotes
+        });
+        lastOrderId = created.id;
+
+        if (channelToUse === 'whatsapp') {
+          const rawMsg = buildWhatsAppMessage(storeItems, storeBiz);
+          const bizPhone = storeBiz.whatsapp || storeBiz.phone;
+          openWhatsAppDirect(bizPhone, rawMsg);
+        }
       });
 
       // Confetti celebration
@@ -217,17 +263,10 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
         // ignore
       }
 
-      // If checkout is via WhatsApp, open direct WhatsApp chat with the merchant
-      if (channelToUse === 'whatsapp') {
-        const rawMsg = buildWhatsAppMessage();
-        const bizPhone = targetBusiness.whatsapp || targetBusiness.phone;
-        openWhatsAppDirect(bizPhone, rawMsg);
-      }
-
       setIsSubmitting(false);
       onClose();
-      onOrderSuccess(newOrder.id);
-    }, 600);
+      onOrderSuccess(lastOrderId);
+    }, 500);
   };
 
   return (
@@ -368,6 +407,15 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
               </div>
             )}
 
+            {hasMultipleBusinesses && (
+              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-[11px] text-amber-900 font-semibold flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  Tienes productos de <strong>{businessIdsInCart.length} comercios distintos</strong>. Se generará y enviará un pedido separado al WhatsApp de cada negocio.
+                </span>
+              </div>
+            )}
+
             {/* 2. Items List */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-700">
@@ -381,44 +429,56 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
               </div>
 
               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {cart.map((item) => (
-                  <div
-                    key={item.product.id}
-                    className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200/90 shadow-2xs"
-                  >
-                    <img
-                      src={item.product.image}
-                      alt={item.product.name}
-                      className="w-11 h-11 rounded-lg object-cover bg-slate-100 shrink-0 border border-slate-200"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h5 className="font-bold text-slate-900 text-xs truncate">
-                        {item.product.name}
-                      </h5>
-                      <span className="text-xs text-[#D4021D] font-extrabold tabular-nums">
-                        {formatCurrency(item.product.price).formatted}
-                      </span>
-                    </div>
+                {cart.map((item, idx) => {
+                  const unitPriceBs = item.itemTotalBs ?? item.product.price;
+                  const lineTotalBs = unitPriceBs * item.quantity;
+                  return (
+                    <div
+                      key={`${item.product.id}-${idx}`}
+                      className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200/90 shadow-2xs"
+                    >
+                      <img
+                        src={resolveProductImage(item.product.image, item.product.images, item.product.name)}
+                        alt={item.product.name}
+                        onError={(e) => {
+                          e.currentTarget.src = buildSafeProductPlaceholder(item.product.name);
+                        }}
+                        className="w-11 h-11 rounded-lg object-cover bg-slate-100 shrink-0 border border-slate-200"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h5 className="font-bold text-slate-900 text-xs truncate">
+                          {item.product.name}
+                        </h5>
+                        {item.selectedVariantOption && (
+                          <p className="text-[10px] text-slate-500 truncate">
+                            {item.selectedVariantOption.variantName}: {item.selectedVariantOption.optionLabel}
+                          </p>
+                        )}
+                        <span className="text-xs text-[#D4021D] font-extrabold tabular-nums">
+                          {formatCurrency(lineTotalBs).formatted}
+                        </span>
+                      </div>
 
-                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-0.5 shadow-2xs">
-                      <button
-                        onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
-                        className="text-slate-500 hover:text-slate-900 cursor-pointer p-0.5"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="text-xs font-bold text-slate-900 min-w-[12px] text-center">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
-                        className="text-slate-500 hover:text-slate-900 cursor-pointer p-0.5"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-0.5 shadow-2xs">
+                        <button
+                          onClick={() => updateCartQuantity(item.product.id, item.quantity - 1, idx)}
+                          className="text-slate-500 hover:text-slate-900 cursor-pointer p-0.5"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-xs font-bold text-slate-900 min-w-[12px] text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateCartQuantity(item.product.id, item.quantity + 1, idx)}
+                          className="text-slate-500 hover:text-slate-900 cursor-pointer p-0.5"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -438,7 +498,9 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                 >
                   <span className="text-base">🛵</span>
                   <span className="text-xs font-bold">Envío a Domicilio</span>
-                  <span className="text-[10px] text-[#D4021D] font-bold">+Bs. 35</span>
+                  <span className="text-[10px] text-[#D4021D] font-bold tabular-nums">
+                    +{formatCurrency(35).formatted}
+                  </span>
                 </button>
 
                 <button

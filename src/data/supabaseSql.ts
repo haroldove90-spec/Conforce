@@ -355,18 +355,43 @@ CREATE TABLE IF NOT EXISTS public.orders (
     subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
     delivery_fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
     service_fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    service_fee_rate NUMERIC(5, 4) NOT NULL DEFAULT 0.05,
     total NUMERIC(10, 2) NOT NULL DEFAULT 0,
     delivery_type TEXT NOT NULL CHECK (delivery_type IN ('pickup', 'delivery')),
     delivery_address TEXT NOT NULL DEFAULT '',
     delivery_coordinates JSONB,
-    payment_method TEXT NOT NULL CHECK (payment_method IN ('card', 'cash_on_delivery', 'pos_terminal')),
+    payment_method TEXT NOT NULL,
+    payment_reference TEXT,
+    payment_proof_url TEXT,
+    driver_id TEXT,
+    driver_name TEXT,
+    driver_phone TEXT,
+    driver_vehicle TEXT,
+    driver_step TEXT,
+    driver_assigned_at TIMESTAMPTZ,
+    driver_delivered_at TIMESTAMPTZ,
+    cancellation_reason TEXT,
+    review JSONB,
     order_channel TEXT NOT NULL DEFAULT 'app' CHECK (order_channel IN ('app', 'whatsapp')),
     status TEXT NOT NULL DEFAULT 'preparing' CHECK (status IN ('preparing', 'ready', 'on_the_way', 'delivered', 'cancelled')),
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS service_fee NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS service_fee_rate NUMERIC(5, 4) DEFAULT 0.05;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_reference TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_id TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_name TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_phone TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_vehicle TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_step TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_assigned_at TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_delivered_at TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS review JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_orders_business_id ON public.orders(business_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Business, Product, ProductVariantOption, SelectedExtra } from '../../types';
 import { getBusinessScheduleStatus } from '../../utils/scheduleUtils';
+import { resolveProductImage, buildSafeProductPlaceholder } from '../../utils/imageUtils';
 import {
   X,
   Star,
@@ -266,8 +267,11 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                   >
                     <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-slate-100 border border-slate-100">
                       <img
-                        src={prod.image}
+                        src={resolveProductImage(prod.image, prod.images, prod.name)}
                         alt={prod.name}
+                        onError={(e) => {
+                          e.currentTarget.src = buildSafeProductPlaceholder(prod.name);
+                        }}
                         className="w-full h-full object-cover"
                       />
                       {prod.isOfferOfTheDay && (
@@ -389,11 +393,10 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
           <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
             <div>
               <span className="text-xs text-slate-600 font-medium">Total en Carrito:</span>
-              <p className="font-black text-slate-900 text-base">
-                Bs. {cart.reduce((s, i) => s + (i.itemTotalBs ?? i.product.price) * i.quantity, 0)}{' '}
-                <span className="text-xs text-emerald-600 font-bold">
-                  (${exchangeRateUsd > 0 ? (cart.reduce((s, i) => s + (i.itemTotalBs ?? i.product.price) * i.quantity, 0) / exchangeRateUsd).toFixed(2) : '0'} USD)
-                </span>
+              <p className="font-black text-slate-900 text-base tabular-nums">
+                {formatCurrency(
+                  cart.reduce((s, i) => s + (i.itemTotalBs ?? i.product.price) * i.quantity, 0)
+                ).formatted}
               </p>
             </div>
             <button
@@ -443,12 +446,26 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
             <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
               {/* Product Photos Carousel / Preview */}
               {(() => {
-                const photos = [customizingProduct.image, ...(customizingProduct.images || [])].filter(Boolean);
+                const primaryResolved = resolveProductImage(
+                  customizingProduct.image,
+                  customizingProduct.images,
+                  customizingProduct.name
+                );
+                const photos = Array.from(
+                  new Set([primaryResolved, ...(customizingProduct.images || [])].filter(Boolean))
+                );
                 const currentPhoto = photos[activePhotoIdx] || photos[0];
                 return (
                   <div className="space-y-2">
                     <div className="relative h-44 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
-                      <img src={currentPhoto} alt={customizingProduct.name} className="w-full h-full object-cover" />
+                      <img
+                        src={currentPhoto}
+                        alt={customizingProduct.name}
+                        onError={(e) => {
+                          e.currentTarget.src = buildSafeProductPlaceholder(customizingProduct.name);
+                        }}
+                        className="w-full h-full object-cover"
+                      />
                       {customizingProduct.isOfferOfTheDay && (
                         <span className="absolute top-2 left-2 px-2 py-0.5 bg-amber-400 text-slate-950 font-black text-[9px] rounded-lg uppercase shadow-xs flex items-center gap-1">
                           <Flame className="w-3 h-3 fill-slate-950" /> Oferta del Día

@@ -402,13 +402,29 @@ app.post('/api/gemini/chatbot', handleGeminiAssistant);
 app.post('/api/gemini/assistant', handleGeminiAssistant);
 
 async function startServer() {
-  const distPath = path.resolve(process.cwd(), 'dist');
-  const hasDist = fs.existsSync(path.resolve(distPath, 'index.html'));
-  const hasRootIndex = fs.existsSync(path.resolve(process.cwd(), 'index.html'));
-  const isProd = process.env.NODE_ENV === 'production' || hasDist || process.env.VERCEL === '1';
+  const rootDir = process.cwd();
+  const distPath = path.resolve(rootDir, 'dist');
+  const distIndexPath = path.resolve(distPath, 'index.html');
+  const entryScript = path.basename(process.argv[1] || '');
+  const isCompiledServer = entryScript.endsWith('.js');
+  const isProdMode =
+    (process.env.NODE_ENV === 'production' || process.env.VERCEL === '1' || isCompiledServer) &&
+    fs.existsSync(distIndexPath);
 
-  if (!isProd && !hasDist) {
-    // Development mode: attach Vite middleware dynamically
+  if (isProdMode) {
+    // Production mode: serve built static assets from dist
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+      if (fs.existsSync(distIndexPath)) {
+        return res.sendFile(distIndexPath);
+      }
+      return res.status(503).send('La aplicación se está actualizando. Por favor recarga en unos segundos.');
+    });
+  } else {
+    // Development mode (or fallback when dist/index.html is absent): attach Vite middleware dynamically
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
@@ -419,14 +435,6 @@ async function startServer() {
       appType: 'spa'
     });
     app.use(vite.middlewares);
-  } else {
-    // Production mode: serve built static assets from dist or root
-    const staticDir = hasDist ? distPath : process.cwd();
-    app.use(express.static(staticDir));
-    app.get('*', (req, res) => {
-      const targetIndex = hasDist ? path.resolve(distPath, 'index.html') : path.resolve(process.cwd(), 'index.html');
-      res.sendFile(targetIndex);
-    });
   }
 
   // Handle both numeric ports and Unix sockets (common on Hostinger / LiteSpeed / Passenger)

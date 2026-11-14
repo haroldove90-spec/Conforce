@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Business, Product, DeliveryType } from '../../types';
 import { getBusinessScheduleStatus } from '../../utils/scheduleUtils';
+import { resolveProductImage, buildSafeProductPlaceholder } from '../../utils/imageUtils';
 import {
   Search,
   MapPin,
@@ -425,8 +426,11 @@ export const ProductSearchComparator: React.FC<ProductSearchComparatorProps> = (
                   {/* Middle Body: Product Info & Side-by-Side Comparison Metrics */}
                   <div className="flex items-center gap-3">
                     <img
-                      src={product.image}
+                      src={resolveProductImage(product.image, product.images, product.name)}
                       alt={product.name}
+                      onError={(e) => {
+                        e.currentTarget.src = buildSafeProductPlaceholder(product.name);
+                      }}
                       className="w-16 h-16 rounded-xl object-cover bg-slate-100 shrink-0 border border-slate-100"
                     />
 

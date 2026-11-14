@@ -13,6 +13,17 @@ import {
   DriverProfile
 } from '../types';
 import { sanitizeBusinessCoordinates } from '../utils/venezuelaGeo';
+import { resolveProductImage } from '../utils/imageUtils';
+
+function safeJsonParse<T>(val: any, fallback: T): T {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val !== 'string') return val as T;
+  try {
+    return JSON.parse(val) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 // Supabase Configuration from User Credentials
 const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -134,6 +145,8 @@ export function mapBusinessToDB(biz: Business): any {
 }
 
 export function mapProductFromDB(row: any): Product {
+  const parsedImages = safeJsonParse<string[] | undefined>(row.images, undefined);
+  const cleanImages = Array.isArray(parsedImages) ? parsedImages.filter(Boolean) : undefined;
   return {
     id: row.id,
     businessId: row.business_id,
@@ -143,18 +156,18 @@ export function mapProductFromDB(row: any): Product {
     priceUsd: row.price_usd ? Number(row.price_usd) : undefined,
     originalPrice: row.original_price ? Number(row.original_price) : undefined,
     category: row.category || 'General',
-    image: row.image || '',
-    images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : undefined,
+    image: resolveProductImage(row.image, cleanImages, row.name),
+    images: cleanImages,
     inStock: Boolean(row.in_stock ?? true),
     stockCount: Number(row.stock_count ?? 50),
     tags: Array.isArray(row.tags) ? row.tags : [],
     isOfferOfTheDay: Boolean(row.is_offer_of_the_day ?? false),
     hasVariants: Boolean(row.has_variants ?? false),
-    variants: row.variants ? (typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants) : undefined,
-    ingredients: row.ingredients ? (typeof row.ingredients === 'string' ? JSON.parse(row.ingredients) : row.ingredients) : undefined,
-    extras: row.extras ? (typeof row.extras === 'string' ? JSON.parse(row.extras) : row.extras) : undefined,
+    variants: safeJsonParse(row.variants, undefined),
+    ingredients: safeJsonParse(row.ingredients, undefined),
+    extras: safeJsonParse(row.extras, undefined),
     preparationTime: row.preparation_time || undefined,
-    foodTags: row.food_tags ? (typeof row.food_tags === 'string' ? JSON.parse(row.food_tags) : row.food_tags) : undefined
+    foodTags: safeJsonParse(row.food_tags, undefined)
   };
 }
 
@@ -555,20 +568,30 @@ export async function deleteBusinessInSupabase(id: string): Promise<boolean> {
 }
 
 /**
- * Upserts a product in Supabase.
+ * Upserts a product in Supabase and returns detailed status.
  */
-export async function upsertProductInSupabase(prod: Product): Promise<boolean> {
+export async function upsertProductInSupabaseDetailed(
+  prod: Product
+): Promise<{ success: boolean; message?: string }> {
   try {
     const { error } = await supabase.from('products').upsert(mapProductToDB(prod));
     if (error) {
       console.warn('Supabase upsertProduct error:', error);
-      return false;
+      return { success: false, message: error.message || 'Error al guardar en Supabase' };
     }
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.warn('Supabase upsertProduct exception:', err);
-    return false;
+    return { success: false, message: err?.message || 'Error de conexión con Supabase' };
   }
+}
+
+/**
+ * Upserts a product in Supabase.
+ */
+export async function upsertProductInSupabase(prod: Product): Promise<boolean> {
+  const res = await upsertProductInSupabaseDetailed(prod);
+  return res.success;
 }
 
 /**

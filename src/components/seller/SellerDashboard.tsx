@@ -40,6 +40,13 @@ import {
   ChefHat
 } from 'lucide-react';
 import { SellerBoostPaymentModal } from './SellerBoostPaymentModal';
+import {
+  compressAndEncodeImage,
+  buildSafeProductPlaceholder,
+  resolveProductImage,
+  isPlaceholderImage
+} from '../../utils/imageUtils';
+import { VENEZUELAN_CITIES, findNearestVenezuelanCity } from '../../utils/venezuelaGeo';
 
 export const SellerDashboard: React.FC = () => {
   const {
@@ -102,8 +109,11 @@ export const SellerDashboard: React.FC = () => {
   const [prodIsOffer, setProdIsOffer] = useState(false);
 
   // Photos uploaded from device
-  const [prodImage, setProdImage] = useState(''); // Primary photo base64
+  const [prodImage, setProdImage] = useState(''); // Primary photo base64 (compressed JPEG)
   const [prodImages, setProdImages] = useState<string[]>([]); // Gallery photos base64
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+  const [productSyncFeedback, setProductSyncFeedback] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,6 +151,9 @@ export const SellerDashboard: React.FC = () => {
   const [bizLng, setBizLng] = useState<number>(biz?.coordinates?.lng || -66.9036);
   const [bizHours, setBizHours] = useState(biz?.openingHours || '8:00 AM - 10:00 PM');
   const [bizLogo, setBizLogo] = useState(biz?.logo || '🏪');
+  const [bizBanner, setBizBanner] = useState(biz?.bannerImage || '');
+  const [isProcessingBanner, setIsProcessingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [bizPinColor, setBizPinColor] = useState(biz?.customPinColor || '#2563eb');
   const [profileSavedToast, setProfileSavedToast] = useState(false);
   const [sellerGpsStatus, setSellerGpsStatus] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
@@ -156,6 +169,7 @@ export const SellerDashboard: React.FC = () => {
     setBizLng(biz.coordinates?.lng || -66.9036);
     setBizHours(biz.openingHours || '8:00 AM - 10:00 PM');
     setBizLogo(biz.logo || '🏪');
+    setBizBanner(biz.bannerImage || '');
     setBizPinColor(biz.customPinColor || '#2563eb');
   }, [biz?.id, biz?.coordinates?.lat, biz?.coordinates?.lng]);
 
@@ -184,23 +198,50 @@ export const SellerDashboard: React.FC = () => {
       setBizLng(target.coordinates.lng);
       setBizHours(target.openingHours);
       setBizLogo(target.logo);
+      setBizBanner(target.bannerImage || '');
       setBizPinColor(target.customPinColor || '#2563eb');
     }
   };
 
   const handleSaveProfile = () => {
     if (!biz) return;
+    const nearestCity = findNearestVenezuelanCity(Number(bizLat), Number(bizLng));
     updateBusiness(biz.id, {
       name: bizName,
       phone: bizPhone,
       address: bizAddress,
       coordinates: { lat: Number(bizLat), lng: Number(bizLng) },
+      city: nearestCity.city,
+      state: nearestCity.state,
       openingHours: bizHours,
       logo: bizLogo,
+      bannerImage: bizBanner || biz.bannerImage,
       customPinColor: bizPinColor
     });
     setProfileSavedToast(true);
     setTimeout(() => setProfileSavedToast(false), 2500);
+  };
+
+  const handleBusinessBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setIsProcessingBanner(true);
+    try {
+      const compressed = await compressAndEncodeImage(file, 1200, 700, 0.8);
+      setBizBanner(compressed);
+      setSellerGpsStatus({
+        type: 'success',
+        text: 'Foto de portada cargada. Toca "Guardar Cambios del Perfil Comercial" para aplicarla.'
+      });
+    } catch (err: any) {
+      setSellerGpsStatus({
+        type: 'warning',
+        text: err?.message || 'No se pudo procesar la foto de portada del negocio.'
+      });
+    } finally {
+      setIsProcessingBanner(false);
+    }
   };
 
   const handleUseCurrentGps = async () => {
@@ -230,27 +271,40 @@ export const SellerDashboard: React.FC = () => {
     });
   };
 
-  // Device photo upload handler (camera or file picker)
-  const handleDevicePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, isGallery = false) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // Device photo upload handler (camera or gallery, automatically compressed for mobile + Supabase)
+  const handleDevicePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isGallery = false) => {
+    const fileList = e.target.files ? Array.from(e.target.files) : [];
+    // Reset input value immediately so selecting the same filename (e.g. iOS image.jpg) always triggers onChange
+    e.target.value = '';
+    if (fileList.length === 0) return;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.type.startsWith('image/')) continue;
+    setPhotoUploadError(null);
+    setIsProcessingPhoto(true);
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        if (base64) {
-          if (isGallery) {
-            setProdImages((prev) => [...prev, base64]);
-          } else {
-            setProdImage(base64);
-          }
+    try {
+      const compressedList: string[] = [];
+      for (const file of fileList) {
+        const compressed = await compressAndEncodeImage(file, 900, 900, 0.78);
+        compressedList.push(compressed);
+      }
+
+      if (compressedList.length > 0) {
+        if (isGallery) {
+          setProdImages((prev) => [...prev, ...compressedList]);
+          // If no primary real photo has been set yet, promote the first uploaded photo automatically
+          setProdImage((currentPrimary) =>
+            !currentPrimary || isPlaceholderImage(currentPrimary) ? compressedList[0] : currentPrimary
+          );
+        } else {
+          setProdImage(compressedList[0]);
         }
-      };
-      reader.readAsDataURL(file);
+      }
+    } catch (err: any) {
+      setPhotoUploadError(
+        err?.message || 'No se pudo procesar la foto seleccionada. Intenta con otra imagen JPG o PNG.'
+      );
+    } finally {
+      setIsProcessingPhoto(false);
     }
   };
 
@@ -264,6 +318,8 @@ export const SellerDashboard: React.FC = () => {
     setProdCategory(biz?.category || 'General');
     setProdImage('');
     setProdImages([]);
+    setPhotoUploadError(null);
+    setIsProcessingPhoto(false);
     setProdStock(50);
     setProdTags(''); // Clean, no pre-filled fake tags!
     setProdIsOffer(false);
@@ -288,8 +344,10 @@ export const SellerDashboard: React.FC = () => {
     setProdPrice(prod.price);
     setProdOriginalPrice(prod.originalPrice);
     setProdCategory(prod.category);
-    setProdImage(prod.image);
+    setProdImage(isPlaceholderImage(prod.image) ? '' : prod.image);
     setProdImages(prod.images || []);
+    setPhotoUploadError(null);
+    setIsProcessingPhoto(false);
     setProdStock(prod.stockCount);
     setProdTags(prod.tags.join(', '));
     setProdIsOffer(prod.isOfferOfTheDay);
@@ -307,19 +365,19 @@ export const SellerDashboard: React.FC = () => {
     setShowProductModal(true);
   };
 
-  const handleSaveProduct = () => {
-    if (!prodName.trim()) return;
+  const handleSaveProduct = async () => {
+    if (!prodName.trim() || !biz || isProcessingPhoto) return;
 
     const tagsArray = prodTags
       .split(',')
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
 
-    // Clean dynamic SVG placeholder if no custom camera photo was uploaded (no unrelated mock pictures)
-    const initials = prodName.trim().slice(0, 2).toUpperCase();
-    const cleanPlaceholder = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="%23f8fafc"/><circle cx="200" cy="180" r="80" fill="%23fee2e2"/><text x="50%" y="48%" font-family="sans-serif" font-weight="900" font-size="44" fill="%23D4021D" text-anchor="middle" dominant-baseline="middle">${encodeURIComponent(initials || '🛍️')}</text><text x="50%" y="78%" font-family="sans-serif" font-weight="700" font-size="20" fill="%23334155" text-anchor="middle" dominant-baseline="middle">${encodeURIComponent(prodName.trim().slice(0, 20))}</text></svg>`;
-
-    const finalImage = prodImage || cleanPlaceholder;
+    const realGalleryFirst = prodImages.find((img) => img && !isPlaceholderImage(img));
+    const finalImage =
+      prodImage && !isPlaceholderImage(prodImage)
+        ? prodImage
+        : realGalleryFirst || buildSafeProductPlaceholder(prodName.trim());
 
     const priceUsd = exchangeRateUsd > 0 ? Number((prodPrice / exchangeRateUsd).toFixed(2)) : 0;
 
@@ -353,13 +411,24 @@ export const SellerDashboard: React.FC = () => {
       foodTags: isFoodProduct && prodFoodTags.length > 0 ? prodFoodTags : undefined
     };
 
-    if (editingProduct) {
-      updateProduct(editingProduct.id, productPayload);
-    } else {
-      addProduct(productPayload);
-    }
-
     setShowProductModal(false);
+
+    const syncRes = editingProduct
+      ? await updateProduct(editingProduct.id, productPayload)
+      : await addProduct(productPayload);
+
+    if (syncRes.supabaseSynced) {
+      setProductSyncFeedback({
+        type: 'success',
+        text: `✓ Producto "${productPayload.name}" guardado con su foto y sincronizado en Supabase.`
+      });
+    } else {
+      setProductSyncFeedback({
+        type: 'warning',
+        text: `Guardado localmente, pero hubo un aviso al sincronizar en Supabase: ${syncRes.message || 'verifica tu conexión o columnas SQL'}.`
+      });
+    }
+    setTimeout(() => setProductSyncFeedback(null), 5000);
   };
 
   if (!biz) {
@@ -556,18 +625,30 @@ export const SellerDashboard: React.FC = () => {
 
                   {/* Items summary */}
                   <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1 text-xs">
-                    {order.items.map((i, idx) => (
-                      <div key={idx} className="flex justify-between text-slate-700">
-                        <span>
-                          <strong className="text-[#D4021D] mr-1">{i.quantity}x</strong>
-                          {i.product.name}
-                        </span>
-                        <span className="font-medium">Bs. {i.product.price * i.quantity}</span>
-                      </div>
-                    ))}
+                    {order.items.map((i, idx) => {
+                      const lineTotalBs = (i.itemTotalBs ?? i.product.price) * i.quantity;
+                      return (
+                        <div key={idx} className="flex justify-between text-slate-700">
+                          <span>
+                            <strong className="text-[#D4021D] mr-1">{i.quantity}x</strong>
+                            {i.product.name}
+                            {i.selectedVariantOption && (
+                              <span className="text-[10px] text-slate-500 ml-1">
+                                ({i.selectedVariantOption.optionLabel})
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            {formatCurrency(lineTotalBs).formatted}
+                          </span>
+                        </div>
+                      );
+                    })}
                     <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900">
                       <span>Total:</span>
-                      <span className="text-[#D4021D] font-black">Bs. {order.total}</span>
+                      <span className="text-[#D4021D] font-black tabular-nums">
+                        {formatCurrency(order.total).formatted}
+                      </span>
                     </div>
                   </div>
 
@@ -718,6 +799,18 @@ export const SellerDashboard: React.FC = () => {
             </div>
           </div>
 
+          {productSyncFeedback && (
+            <div
+              className={`px-4 py-2.5 rounded-2xl border text-xs font-bold animate-in fade-in ${
+                productSyncFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-amber-50 border-amber-300 text-amber-900'
+              }`}
+            >
+              {productSyncFeedback.text}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {bizProducts.map((prod) => (
               <div
@@ -726,8 +819,11 @@ export const SellerDashboard: React.FC = () => {
               >
                 <div className="flex gap-3">
                   <img
-                    src={prod.image}
+                    src={resolveProductImage(prod.image, prod.images, prod.name)}
                     alt={prod.name}
+                    onError={(e) => {
+                      e.currentTarget.src = buildSafeProductPlaceholder(prod.name);
+                    }}
                     className="w-20 h-20 rounded-xl object-cover bg-slate-100 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
@@ -751,12 +847,12 @@ export const SellerDashboard: React.FC = () => {
                     <h4 className="font-bold text-slate-900 text-xs md:text-sm line-clamp-1 mt-0.5">
                       {prod.name}
                     </h4>
-                    <div className="flex items-baseline gap-1.5 mt-1">
-                      <span className="text-xs font-black text-[#D4021D]">
-                        Bs. {prod.price}
+                    <div className="flex items-baseline gap-1.5 mt-1 flex-wrap">
+                      <span className="text-xs font-black text-[#D4021D] tabular-nums">
+                        {formatCurrency(prod.price).bs}
                       </span>
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded border border-emerald-100">
-                        ${(exchangeRateUsd > 0 ? (prod.price / exchangeRateUsd).toFixed(2) : '0.00')} USD
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded border border-emerald-100 tabular-nums">
+                        {formatCurrency(prod.price).usd}
                       </span>
                     </div>
 
@@ -1010,17 +1106,55 @@ export const SellerDashboard: React.FC = () => {
                 </div>
               )}
 
+              {/* Business Storefront Banner Photo Upload */}
+              <div className="md:col-span-2 p-3 bg-white rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-800 uppercase flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-[#D4021D]" />
+                    <span>Foto de Portada / Banner de tu Tienda</span>
+                  </span>
+                  <input
+                    type="file"
+                    ref={bannerInputRef}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleBusinessBannerUpload}
+                  />
+                  <button
+                    type="button"
+                    disabled={isProcessingBanner}
+                    onClick={() => bannerInputRef.current?.click()}
+                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-[#D4021D] border border-red-200 rounded-xl text-[11px] font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isProcessingBanner ? 'Optimizando...' : 'Subir Foto del Local'}</span>
+                  </button>
+                </div>
+                {bizBanner && (
+                  <div className="h-24 w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                    <img
+                      src={bizBanner}
+                      alt={bizName || 'Portada del negocio'}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="text-slate-600 text-[10px] font-bold uppercase block mb-1">
-                  Selección rápida de ciudad en Venezuela:
+                  Selección rápida de ciudad en Venezuela ({VENEZUELAN_CITIES.length} ciudades):
                 </label>
                 <select
-                  onChange={async (e) => {
-                    const { VENEZUELAN_CITIES } = await import('../../utils/venezuelaGeo');
+                  onChange={(e) => {
                     const found = VENEZUELAN_CITIES.find((c) => c.name === e.target.value);
                     if (found) {
                       setBizLat(found.lat);
                       setBizLng(found.lng);
+                      setSellerGpsStatus({
+                        type: 'success',
+                        text: `Coordenadas ajustadas a ${found.name}. Toca "Guardar Cambios del Perfil Comercial" para guardar.`
+                      });
                     }
                   }}
                   defaultValue=""
@@ -1029,16 +1163,11 @@ export const SellerDashboard: React.FC = () => {
                   <option value="" disabled>
                     Elegir ciudad (ej. San Felipe, Yaracuy, Caracas, Valencia...)
                   </option>
-                  <option value="San Felipe (Yaracuy)">San Felipe (Yaracuy)</option>
-                  <option value="Caracas (Distrito Capital)">Caracas (Distrito Capital)</option>
-                  <option value="Barquisimeto (Lara)">Barquisimeto (Lara)</option>
-                  <option value="Valencia (Carabobo)">Valencia (Carabobo)</option>
-                  <option value="Maracay (Aragua)">Maracay (Aragua)</option>
-                  <option value="Maracaibo (Zulia)">Maracaibo (Zulia)</option>
-                  <option value="Lechería / Puerto La Cruz (Anzoátegui)">Lechería / Puerto La Cruz (Anzoátegui)</option>
-                  <option value="Mérida (Mérida)">Mérida (Mérida)</option>
-                  <option value="San Cristóbal (Táchira)">San Cristóbal (Táchira)</option>
-                  <option value="Puerto Ordaz / Ciudad Guayana (Bolívar)">Puerto Ordaz / Ciudad Guayana (Bolívar)</option>
+                  {VENEZUELAN_CITIES.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1210,12 +1339,11 @@ export const SellerDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Hidden File Inputs */}
+                {/* Hidden File Inputs (sin capture forzado para permitir cámara y galería en iOS/Android) */}
                 <input
                   type="file"
                   ref={photoInputRef}
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={(e) => handleDevicePhotoUpload(e, false)}
                 />
@@ -1227,6 +1355,20 @@ export const SellerDashboard: React.FC = () => {
                   className="hidden"
                   onChange={(e) => handleDevicePhotoUpload(e, true)}
                 />
+
+                {photoUploadError && (
+                  <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] font-semibold flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{photoUploadError}</span>
+                  </div>
+                )}
+
+                {isProcessingPhoto && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full border-2 border-amber-600 border-t-transparent animate-spin" />
+                    <span>Optimizando y comprimiendo tu foto para guardarla correctamente...</span>
+                  </div>
+                )}
 
                 {/* Primary Photo Preview or Upload Trigger */}
                 {prodImage ? (
@@ -1241,20 +1383,22 @@ export const SellerDashboard: React.FC = () => {
                         Foto Principal Cargada
                       </span>
                       <p className="text-[10px] text-slate-500">
-                        Lista para mostrarse a los clientes en el Marketplace.
+                        Optimizada y lista para mostrarse a los clientes en el Marketplace.
                       </p>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
+                          disabled={isProcessingPhoto}
                           onClick={() => photoInputRef.current?.click()}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
                         >
                           <Camera className="w-3 h-3 text-[#D4021D]" /> Cambiar
                         </button>
                         <button
                           type="button"
+                          disabled={isProcessingPhoto}
                           onClick={() => setProdImage('')}
-                          className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold cursor-pointer"
+                          className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold cursor-pointer disabled:opacity-50"
                         >
                           Eliminar
                         </button>
@@ -1264,18 +1408,19 @@ export const SellerDashboard: React.FC = () => {
                 ) : (
                   <button
                     type="button"
+                    disabled={isProcessingPhoto}
                     onClick={() => photoInputRef.current?.click()}
-                    className="w-full py-5 border-2 border-dashed border-red-200 hover:border-[#D4021D] bg-white rounded-2xl flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group hover:bg-red-50/20"
+                    className="w-full py-5 border-2 border-dashed border-red-200 hover:border-[#D4021D] bg-white rounded-2xl flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group hover:bg-red-50/20 disabled:opacity-60"
                   >
                     <div className="w-10 h-10 rounded-full bg-red-50 group-hover:bg-red-100 flex items-center justify-center text-[#D4021D]">
                       <Camera className="w-5 h-5" />
                     </div>
                     <div className="text-center">
                       <span className="text-xs font-bold text-slate-800 block">
-                        Tomar Foto o Seleccionar de la Galería
+                        {isProcessingPhoto ? 'Procesando imagen...' : 'Tomar Foto o Seleccionar de la Galería'}
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        Sube la imagen directamente desde tu teléfono o computador (sin enlaces)
+                        Compresión automática para que tu foto exacta se guarde rápido y sin errores
                       </span>
                     </div>
                   </button>
@@ -1653,9 +1798,10 @@ export const SellerDashboard: React.FC = () => {
               </button>
               <button
                 onClick={handleSaveProduct}
-                className="flex-1 bg-[#D4021D] hover:bg-[#b50218] text-white py-2.5 rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                disabled={isProcessingPhoto || !prodName.trim()}
+                className="flex-1 bg-[#D4021D] hover:bg-[#b50218] disabled:opacity-50 text-white py-2.5 rounded-xl text-xs font-bold shadow-xs cursor-pointer"
               >
-                Guardar Producto
+                {isProcessingPhoto ? 'Procesando foto...' : 'Guardar Producto'}
               </button>
             </div>
           </div>
