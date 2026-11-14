@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { CurrencySelector } from '../common/CurrencySelector';
 import { SavedAddress } from '../../types';
 import {
   User,
@@ -244,6 +245,17 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Currency Preference (Bolívares Bs. / Dólares USD) */}
+      <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-2.5">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <h3 className="font-bold text-slate-900 text-sm">Moneda de Precios (Bolívares / Dólares)</h3>
+            <p className="text-xs text-slate-500">Elige cómo deseas ver los precios en todo el marketplace</p>
+          </div>
+          <CurrencySelector showRate />
         </div>
       </div>
 

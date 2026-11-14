@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Business, BusinessCategory, Product } from '../../types';
 import { getBusinessScheduleStatus } from '../../utils/scheduleUtils';
 import { ProductSearchComparator } from './ProductSearchComparator';
+import { CurrencySelector } from '../common/CurrencySelector';
 import {
   Search,
   Star,
@@ -66,6 +67,7 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
     openDriverRegistration,
     isMockDataCleared,
     exchangeRateUsd,
+    formatCurrency,
     requestProductOrder
   } = useApp();
 
@@ -235,9 +237,9 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
               </p>
               <p className="text-[10px] text-slate-600 font-semibold flex items-center gap-1">
                 <span>
-                  {locationPermissionStatus === 'denied'
-                    ? 'GPS bloqueado · Toca para elegir tu ciudad'
-                    : 'Ordenado por cercanía · Toca para cambiar ciudad'}
+                  {locationPermissionStatus === 'granted'
+                    ? 'GPS activo · Ordenado por cercanía'
+                    : 'GPS desactivado · Toca Activar o elige tu ciudad'}
                 </span>
               </p>
             </div>
@@ -249,10 +251,10 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
               onClick={() => detectUserLocation(true)}
               disabled={isLocating}
               className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Detectar ubicación GPS o elegir ciudad"
+              title="Activar GPS o actualizar ubicación real"
             >
               <LocateFixed className={`w-3.5 h-3.5 text-[#D4021D] ${isLocating ? 'animate-spin' : ''}`} />
-              <span>{isLocating ? 'GPS...' : 'Actualizar'}</span>
+              <span>{isLocating ? 'GPS...' : locationPermissionStatus === 'granted' ? 'Actualizar' : 'Activar GPS'}</span>
             </button>
 
             <button
@@ -277,6 +279,12 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
           </div>
         </div>
 
+        {/* Currency Switcher Bar (Bolívares / Dólares) */}
+        <div className="flex items-center justify-between gap-2 px-1">
+          <span className="text-[11px] font-bold text-slate-600">Moneda de visualización:</span>
+          <CurrencySelector showRate />
+        </div>
+
         {/* Location Status Feedback Banner */}
         {locationFeedback && (
           <div
@@ -293,13 +301,13 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
               <span className="font-medium leading-snug">{locationFeedback.message}</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {locationPermissionStatus === 'denied' && (
+              {locationPermissionStatus !== 'granted' && (
                 <button
                   type="button"
                   onClick={() => setIsLocationPickerOpen(true)}
                   className="px-2.5 py-1 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-lg text-[11px] font-bold cursor-pointer"
                 >
-                  Elegir ciudad
+                  Activar / Ciudad
                 </button>
               )}
               <button
@@ -684,8 +692,8 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
                       <h4 className="font-bold text-slate-900 text-sm truncate">
                         {prod.name}
                       </h4>
-                      <span className="text-sm font-extrabold text-slate-900 shrink-0">
-                        Bs. {prod.price}
+                      <span className="text-xs sm:text-sm font-extrabold text-slate-900 shrink-0 tabular-nums">
+                        {formatCurrency(prod.price).formatted}
                       </span>
                     </div>
 
@@ -780,7 +788,9 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-sm font-black text-white">Bs. ${cartSubtotal}</span>
+              <span className="text-xs sm:text-sm font-black text-white tabular-nums">
+                {formatCurrency(cartSubtotal).formatted}
+              </span>
               <span className="text-xs bg-[#D4021D] hover:bg-[#b50218] text-white font-bold px-2.5 py-1 rounded-xl">
                 Pedir →
               </span>

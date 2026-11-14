@@ -49,7 +49,8 @@ export const ProductSearchComparator: React.FC<ProductSearchComparatorProps> = (
     recordFailedSearch,
     openWebAssistantWithPrompt,
     requestProductOrder,
-    exchangeRateUsd
+    exchangeRateUsd,
+    formatCurrency
   } = useApp();
 
   // Mode: 'delivery' vs 'pickup'
@@ -476,13 +477,13 @@ export const ProductSearchComparator: React.FC<ProductSearchComparatorProps> = (
                         <span className="text-[10px] text-slate-600 font-semibold block leading-none">
                           Precio Producto
                         </span>
-                        <div className="flex items-baseline gap-1 mt-0.5">
-                          <span className="text-sm sm:text-base font-black text-slate-900">
-                            Bs. {product.price}
+                        <div className="flex items-baseline gap-1.5 flex-wrap mt-0.5">
+                          <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums">
+                            {formatCurrency(product.price).formatted}
                           </span>
                           {product.originalPrice && product.originalPrice > product.price && (
-                            <span className="text-[10px] text-slate-400 line-through">
-                              Bs. {product.originalPrice}
+                            <span className="text-[10px] text-slate-400 line-through tabular-nums">
+                              {formatCurrency(product.originalPrice).formatted}
                             </span>
                           )}
                         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Business, Product, Order, OrderStatus, ProductVariantOption, ProductVariant, ProductExtra } from '../../types';
 import {
@@ -62,6 +62,7 @@ export const SellerDashboard: React.FC = () => {
     setIsSoundAlertEnabled,
     playOrderChime,
     userLocation,
+    requestDeviceGpsCoordinates,
     activeSellerTab,
     setActiveSellerTab,
     openBusinessRegistration,
@@ -142,6 +143,21 @@ export const SellerDashboard: React.FC = () => {
   const [bizLogo, setBizLogo] = useState(biz?.logo || '🏪');
   const [bizPinColor, setBizPinColor] = useState(biz?.customPinColor || '#2563eb');
   const [profileSavedToast, setProfileSavedToast] = useState(false);
+  const [sellerGpsStatus, setSellerGpsStatus] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
+  const [isDetectingSellerGps, setIsDetectingSellerGps] = useState(false);
+
+  // Keep form synced whenever active business changes or hydrates from Supabase
+  useEffect(() => {
+    if (!biz) return;
+    setBizName(biz.name || '');
+    setBizPhone(biz.phone || '');
+    setBizAddress(biz.address || '');
+    setBizLat(biz.coordinates?.lat || 10.4806);
+    setBizLng(biz.coordinates?.lng || -66.9036);
+    setBizHours(biz.openingHours || '8:00 AM - 10:00 PM');
+    setBizLogo(biz.logo || '🏪');
+    setBizPinColor(biz.customPinColor || '#2563eb');
+  }, [biz?.id, biz?.coordinates?.lat, biz?.coordinates?.lng]);
 
   // States for Driver Dispatch Modal
   const [dispatchOrder, setDispatchOrder] = useState<Order | null>(null);
@@ -187,27 +203,31 @@ export const SellerDashboard: React.FC = () => {
     setTimeout(() => setProfileSavedToast(false), 2500);
   };
 
-  const handleUseCurrentGps = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setBizLat(Number(pos.coords.latitude.toFixed(6)));
-          setBizLng(Number(pos.coords.longitude.toFixed(6)));
-        },
-        () => {
-          if (userLocation) {
-            setBizLat(userLocation.lat);
-            setBizLng(userLocation.lng);
-          }
-        },
-        { enableHighAccuracy: true, timeout: 7000 }
-      );
+  const handleUseCurrentGps = async () => {
+    setSellerGpsStatus(null);
+    setIsDetectingSellerGps(true);
+    const res = await requestDeviceGpsCoordinates();
+    setIsDetectingSellerGps(false);
+
+    if (res.success && res.coords) {
+      const lat = Number(res.coords.lat.toFixed(6));
+      const lng = Number(res.coords.lng.toFixed(6));
+      setBizLat(lat);
+      setBizLng(lng);
+      setSellerGpsStatus({
+        type: 'success',
+        text: `GPS detectado (${lat}, ${lng}). Recuerda tocar "Guardar Cambios del Perfil Comercial" para guardarlo.`
+      });
       return;
     }
-    if (userLocation) {
-      setBizLat(userLocation.lat);
-      setBizLng(userLocation.lng);
-    }
+
+    setSellerGpsStatus({
+      type: 'warning',
+      text:
+        res.reason === 'permission_denied'
+          ? 'Permiso GPS bloqueado en tu dispositivo. Habilita el permiso de ubicación en el navegador o elige tu ciudad abajo.'
+          : 'El GPS de tu teléfono parece estar apagado. Enciende la ubicación del móvil y vuelve a intentarlo, o selecciona tu ciudad.'
+    });
   };
 
   // Device photo upload handler (camera or file picker)
@@ -957,6 +977,10 @@ export const SellerDashboard: React.FC = () => {
                       const res = await geocodeVenezuelaAddress(bizAddress);
                       setBizLat(Number(res.lat.toFixed(6)));
                       setBizLng(Number(res.lng.toFixed(6)));
+                      setSellerGpsStatus({
+                        type: 'success',
+                        text: `Ubicado en ${res.label}. Toca "Guardar Cambios" para actualizar en Supabase.`
+                      });
                     }}
                     className="flex items-center gap-1 text-[11px] bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 px-2.5 py-1 rounded-lg font-bold cursor-pointer"
                   >
@@ -964,13 +988,27 @@ export const SellerDashboard: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    disabled={isDetectingSellerGps}
                     onClick={handleUseCurrentGps}
-                    className="flex items-center gap-1 text-[11px] text-[#D4021D] hover:text-[#b50218] font-bold cursor-pointer"
+                    className="flex items-center gap-1 text-[11px] text-[#D4021D] hover:text-[#b50218] font-bold cursor-pointer disabled:opacity-60"
                   >
-                    <LocateFixed className="w-3.5 h-3.5" /> Usar mi GPS actual
+                    <LocateFixed className={`w-3.5 h-3.5 ${isDetectingSellerGps ? 'animate-spin' : ''}`} />
+                    <span>{isDetectingSellerGps ? 'Detectando GPS...' : 'Usar mi GPS actual'}</span>
                   </button>
                 </div>
               </div>
+
+              {sellerGpsStatus && (
+                <div
+                  className={`px-3 py-2 rounded-xl border text-[11px] font-semibold ${
+                    sellerGpsStatus.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  {sellerGpsStatus.text}
+                </div>
+              )}
 
               <div>
                 <label className="text-slate-600 text-[10px] font-bold uppercase block mb-1">

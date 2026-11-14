@@ -183,11 +183,18 @@ interface AppContextType {
   userAddressLabel: string;
   isLocating: boolean;
   locationPermissionStatus: 'granted' | 'denied' | 'prompt' | 'unknown';
+  gpsStatusReason: 'idle' | 'prompt_needed' | 'permission_denied' | 'gps_off_or_unavailable' | 'timeout' | 'granted';
   locationFeedback: { type: 'info' | 'warning' | 'success' | 'error'; message: string } | null;
   clearLocationFeedback: () => void;
   isLocationPickerOpen: boolean;
   setIsLocationPickerOpen: (open: boolean) => void;
-  detectUserLocation: (manualTrigger?: boolean) => void;
+  detectUserLocation: (manualTrigger?: boolean) => Promise<boolean>;
+  requestDeviceGpsCoordinates: () => Promise<{
+    success: boolean;
+    coords?: Coordinates;
+    reason?: 'permission_denied' | 'gps_off_or_unavailable' | 'timeout' | 'unsupported';
+    message?: string;
+  }>;
   setUserCustomLocation: (coords: Coordinates, label: string) => void;
   savedAddresses: SavedAddress[];
   addSavedAddress: (addr: Omit<SavedAddress, 'id'>) => void;
@@ -2063,6 +2070,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locationPermissionStatus, setLocationPermissionStatus] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('prompt');
+  const [gpsStatusReason, setGpsStatusReason] = useState<
+    'idle' | 'prompt_needed' | 'permission_denied' | 'gps_off_or_unavailable' | 'timeout' | 'granted'
+  >('idle');
   const [locationFeedback, setLocationFeedback] = useState<{
     type: 'info' | 'warning' | 'success' | 'error';
     message: string;
@@ -2340,14 +2350,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Request & Auto-Detect Geolocation on Mount (respect manual city choice if saved)
-  useEffect(() => {
-    const manualChoice = localStorage.getItem('mk_user_location_manual') === 'true';
-    if (!manualChoice) {
-      detectUserLocation(false);
-    }
-  }, []);
-
   const persistUserLocation = (coords: Coordinates, label: string, isManual: boolean) => {
     setUserLocation(coords);
     setUserAddressLabel(label);
@@ -2355,92 +2357,231 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('mk_user_location', JSON.stringify(coords));
       localStorage.setItem('mk_user_address_label', label);
       localStorage.setItem('mk_user_location_manual', isManual ? 'true' : 'false');
+      localStorage.setItem('mk_user_location_confirmed', 'true');
     } catch {}
   };
 
-  const detectUserLocation = (manualTrigger = true) => {
-    const handleFallback = async (reasonMsg: string) => {
-      // Try automatic IP-based Venezuelan city detection (key-free)
-      const ipCity = await detectIpLocationVenezuela();
-      if (ipCity) {
-        const ipCoords = { lat: ipCity.lat, lng: ipCity.lng };
-        persistUserLocation(ipCoords, ipCity.label, false);
-        setLocationPermissionStatus('denied');
-        setIsLocating(false);
-        setLocationFeedback({
-          type: 'warning',
-          message: `${reasonMsg} Se estimó tu ciudad por conexión de red (${ipCity.city}, ${ipCity.state}). Puedes ajustarla manualmente si es necesario.`
-        });
-        return;
-      }
-
-      // If IP fallback could not resolve Venezuela (or VPN/proxy), keep current saved city or Caracas
-      const currentValid =
-        userLocation && isInsideVenezuela(userLocation.lat, userLocation.lng)
-          ? userLocation
-          : DEFAULT_CENTER_COORDS;
-      const keepLabel =
-        userLocation && isInsideVenezuela(userLocation.lat, userLocation.lng) && userAddressLabel
-          ? userAddressLabel
-          : 'Caracas, Distrito Capital (Venezuela)';
-
-      persistUserLocation(currentValid, keepLabel, false);
-      setLocationPermissionStatus('denied');
-      setIsLocating(false);
-
-      if (manualTrigger) {
-        setLocationFeedback({
-          type: 'warning',
-          message: `${reasonMsg} Selecciona tu ciudad en Venezuela para calcular las distancias exactas.`
-        });
-        setIsLocationPickerOpen(true);
-      }
-    };
-
-    if (!navigator.geolocation) {
-      setIsLocating(true);
-      handleFallback('Tu navegador o dispositivo no soporta geolocalización GPS.');
-      return;
+  // Two-step mobile-friendly GPS reader:
+  // Step 1: High accuracy (GPS satellite)
+  // Step 2: Network/Wi-Fi accuracy fallback when indoors or weak satellite lock
+  const requestDeviceGpsCoordinates = async (): Promise<{
+    success: boolean;
+    coords?: Coordinates;
+    reason?: 'permission_denied' | 'gps_off_or_unavailable' | 'timeout' | 'unsupported';
+    message?: string;
+  }> => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      return {
+        success: false,
+        reason: 'unsupported',
+        message: 'Tu dispositivo o navegador no soporta geolocalización GPS.'
+      };
     }
 
+    const getPos = (options: PositionOptions) =>
+      new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+
+    try {
+      const pos = await getPos({
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 0
+      });
+      return {
+        success: true,
+        coords: { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      };
+    } catch (err: any) {
+      if (err?.code === 1) {
+        return {
+          success: false,
+          reason: 'permission_denied',
+          message: 'El permiso de ubicación fue bloqueado en tu teléfono o navegador.'
+        };
+      }
+
+      // Retry once with lower-accuracy (Wi-Fi / cell network) for indoor phones
+      try {
+        const posFallback = await getPos({
+          enableHighAccuracy: false,
+          timeout: 9000,
+          maximumAge: 30000
+        });
+        return {
+          success: true,
+          coords: { lat: posFallback.coords.latitude, lng: posFallback.coords.longitude }
+        };
+      } catch (err2: any) {
+        if (err2?.code === 1) {
+          return {
+            success: false,
+            reason: 'permission_denied',
+            message: 'El permiso de ubicación fue bloqueado en tu teléfono o navegador.'
+          };
+        }
+        if (err2?.code === 3) {
+          return {
+            success: false,
+            reason: 'timeout',
+            message: 'No pudimos recibir la señal GPS. Verifica que el GPS de tu teléfono esté encendido.'
+          };
+        }
+        return {
+          success: false,
+          reason: 'gps_off_or_unavailable',
+          message: 'El GPS de tu dispositivo móvil parece estar apagado o sin señal disponible.'
+        };
+      }
+    }
+  };
+
+  const detectUserLocation = async (manualTrigger = true): Promise<boolean> => {
     setIsLocating(true);
     if (manualTrigger) {
       setLocationFeedback(null);
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const coords = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        };
-        setLocationPermissionStatus('granted');
-        const resolvedLabel = await reverseGeocodeVenezuela(coords.lat, coords.lng);
-        persistUserLocation(coords, resolvedLabel, false);
-        setIsLocating(false);
-        if (manualTrigger) {
-          setLocationFeedback({
-            type: 'success',
-            message: `Ubicación GPS actualizada: ${resolvedLabel}`
-          });
-        }
-      },
-      (err) => {
-        const reason =
-          err?.code === 1
-            ? 'El teléfono o navegador no tiene permiso de ubicación GPS activado.'
-            : err?.code === 3
-              ? 'El GPS tardó demasiado en responder.'
-              : 'No se pudo obtener la señal GPS del dispositivo.';
-        handleFallback(reason);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 8000,
-        maximumAge: manualTrigger ? 0 : 60000
+    const res = await requestDeviceGpsCoordinates();
+
+    if (res.success && res.coords) {
+      setLocationPermissionStatus('granted');
+      setGpsStatusReason('granted');
+      const resolvedLabel = await reverseGeocodeVenezuela(res.coords.lat, res.coords.lng);
+      persistUserLocation(res.coords, resolvedLabel, false);
+      setIsLocating(false);
+
+      if (manualTrigger) {
+        setLocationFeedback({
+          type: 'success',
+          message: `Ubicación GPS detectada en tiempo real: ${resolvedLabel}`
+        });
+        setIsLocationPickerOpen(false);
       }
+      return true;
+    }
+
+    // Handle GPS off / permission denied / unavailable clearly without masking with fake IP Caracas
+    const reason = res.reason || 'gps_off_or_unavailable';
+    setLocationPermissionStatus('denied');
+    setGpsStatusReason(
+      reason === 'permission_denied'
+        ? 'permission_denied'
+        : reason === 'timeout'
+          ? 'timeout'
+          : 'gps_off_or_unavailable'
     );
+    setIsLocating(false);
+
+    const feedbackMsg =
+      reason === 'permission_denied'
+        ? 'Permiso de ubicación bloqueado. Actívalo en tu teléfono/navegador y toca "Reintentar GPS" para detectar tu ubicación real.'
+        : 'Tu GPS parece estar apagado o sin señal. Enciende la ubicación (GPS) de tu dispositivo móvil y toca "Ya encendí mi GPS, detectar ahora".';
+
+    setLocationFeedback({
+      type: 'warning',
+      message: feedbackMsg
+    });
+
+    if (manualTrigger) {
+      setIsLocationPickerOpen(true);
+    }
+    return false;
   };
+
+  // On Mount: inspect real browser Permissions API so mobile users get prompted properly
+  useEffect(() => {
+    let permissionStatusRef: PermissionStatus | null = null;
+    let promptTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleMountLocation = async () => {
+      const hasManualCity = localStorage.getItem('mk_user_location_manual') === 'true';
+      const hasConfirmedBefore = localStorage.getItem('mk_user_location_confirmed') === 'true';
+
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        setLocationPermissionStatus('denied');
+        setGpsStatusReason('gps_off_or_unavailable');
+        if (!hasConfirmedBefore) {
+          promptTimer = setTimeout(() => setIsLocationPickerOpen(true), 450);
+        }
+        return;
+      }
+
+      if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+        try {
+          const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          permissionStatusRef = perm;
+
+          const syncPerm = (state: PermissionState) => {
+            if (state === 'granted') {
+              setLocationPermissionStatus('granted');
+              setGpsStatusReason('granted');
+            } else if (state === 'denied') {
+              setLocationPermissionStatus('denied');
+              setGpsStatusReason('permission_denied');
+            } else {
+              setLocationPermissionStatus('prompt');
+              setGpsStatusReason('prompt_needed');
+            }
+          };
+
+          syncPerm(perm.state);
+          perm.onchange = () => {
+            syncPerm(perm.state);
+            if (perm.state === 'granted') {
+              detectUserLocation(false);
+            }
+          };
+
+          if (perm.state === 'granted') {
+            if (!hasManualCity) {
+              await detectUserLocation(false);
+            }
+            return;
+          }
+
+          // State is 'prompt' or 'denied': mobile browsers require a tap or turning on GPS.
+          // Open the GPS activation popup proactively on first visit so user can grant/turn on GPS!
+          if (!hasConfirmedBefore) {
+            setLocationFeedback({
+              type: 'warning',
+              message:
+                perm.state === 'denied'
+                  ? 'El acceso GPS está bloqueado o apagado en tu dispositivo. Actívalo para calcular distancias exactas.'
+                  : 'Activa tu GPS para detectar automáticamente tu ubicación y mostrarte los comercios más cercanos.'
+            });
+            promptTimer = setTimeout(() => setIsLocationPickerOpen(true), 450);
+          }
+          return;
+        } catch {
+          // Safari iOS fallback when navigator.permissions.query('geolocation') throws
+        }
+      }
+
+      // iOS Safari / fallback browsers without Permissions API:
+      if (!hasConfirmedBefore) {
+        setLocationPermissionStatus('prompt');
+        setGpsStatusReason('prompt_needed');
+        setLocationFeedback({
+          type: 'info',
+          message: 'Activa tu ubicación GPS para detectar tu posición real en Venezuela.'
+        });
+        promptTimer = setTimeout(() => setIsLocationPickerOpen(true), 450);
+      } else if (!hasManualCity) {
+        detectUserLocation(false);
+      }
+    };
+
+    handleMountLocation();
+
+    return () => {
+      if (promptTimer) clearTimeout(promptTimer);
+      if (permissionStatusRef) {
+        permissionStatusRef.onchange = null;
+      }
+    };
+  }, []);
 
   const setUserCustomLocation = (coords: Coordinates, label: string) => {
     persistUserLocation(coords, label, true);
@@ -2793,15 +2934,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const [currencyDisplayMode, setCurrencyDisplayMode] = useState<'dual' | 'bs' | 'usd'>('dual');
+  const [currencyDisplayMode, setCurrencyDisplayModeState] = useState<'dual' | 'bs' | 'usd'>(() => {
+    try {
+      const saved = localStorage.getItem('mk_currency_display_mode');
+      if (saved === 'bs' || saved === 'usd' || saved === 'dual') {
+        return saved;
+      }
+    } catch {}
+    return 'dual';
+  });
+
+  const setCurrencyDisplayMode = (mode: 'dual' | 'bs' | 'usd') => {
+    setCurrencyDisplayModeState(mode);
+    try {
+      localStorage.setItem('mk_currency_display_mode', mode);
+    } catch {}
+  };
 
   const formatCurrency = (amountBs: number) => {
     const safeAmount = Number(amountBs) || 0;
     const bsFormatted = `Bs. ${safeAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const usdVal = exchangeRateUsd > 0 ? safeAmount / exchangeRateUsd : 0;
-    const usdFormatted = `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const usdFormatted = `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
 
-    let display = `${bsFormatted} (${usdFormatted})`;
+    let display = `${bsFormatted} · ${usdFormatted}`;
     if (currencyDisplayMode === 'bs') display = bsFormatted;
     if (currencyDisplayMode === 'usd') display = usdFormatted;
 
@@ -3343,11 +3499,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userAddressLabel,
         isLocating,
         locationPermissionStatus,
+        gpsStatusReason,
         locationFeedback,
         clearLocationFeedback,
         isLocationPickerOpen,
         setIsLocationPickerOpen,
         detectUserLocation,
+        requestDeviceGpsCoordinates,
         setUserCustomLocation,
         savedAddresses,
         addSavedAddress,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PulsoLogo } from './PulsoLogo';
+import { CurrencySelector } from './CurrencySelector';
 import {
   MapPin,
   LocateFixed,
@@ -30,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
     userAddressLabel,
     detectUserLocation,
     isLocating,
+    locationPermissionStatus,
     setIsLocationPickerOpen,
     setIsClientAuthModalOpen,
     setIsCorporateAuthModalOpen,
@@ -120,18 +122,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
           )}
         </div>
 
-        {/* Center: GPS Location Pill (Clean, compact, and truncated) */}
-        <div className="flex-1 max-w-xs hidden md:flex items-center justify-center min-w-0">
-          <div className="w-full max-w-[240px] flex items-center justify-between gap-1 px-2.5 py-1 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-white shadow-xs">
+        {/* Center: GPS Location Pill & Currency Switcher */}
+        <div className="flex-1 max-w-md hidden md:flex items-center justify-center gap-2 min-w-0">
+          <div className="w-full max-w-[230px] flex items-center justify-between gap-1 px-2.5 py-1 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-white shadow-xs">
             <button
               type="button"
               onClick={() => setIsLocationPickerOpen(true)}
               className="flex items-center gap-1.5 min-w-0 flex-1 text-left hover:text-white transition-colors py-0.5 cursor-pointer"
-              title="Cambiar ciudad en Venezuela"
+              title="Cambiar ciudad o activar GPS"
             >
               <MapPin className="w-3.5 h-3.5 text-[#D4021D] shrink-0" />
               <span className="truncate text-zinc-300 font-medium text-xs">
-                {userAddressLabel}
+                {locationPermissionStatus === 'granted' ? userAddressLabel : 'Activar GPS · Elegir ciudad'}
               </span>
             </button>
             <button
@@ -144,6 +146,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart, onOpenRoleModal }) =
               <LocateFixed className={`w-3.5 h-3.5 text-zinc-400 ${isLocating ? 'animate-spin text-[#D4021D]' : ''}`} />
             </button>
           </div>
+
+          <CurrencySelector variant="dark" />
         </div>
 
         {/* Right: User, Logout & Cart Actions */}

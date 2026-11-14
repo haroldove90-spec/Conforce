@@ -51,7 +51,8 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
     currentUser,
     setIsClientAuthModalOpen,
     setClientAuthIntent,
-    exchangeRateUsd
+    exchangeRateUsd,
+    formatCurrency
   } = useApp();
 
   // Channel Selection: Default to 'whatsapp' (Los pedidos se realizan al WhatsApp del negocio)
@@ -394,8 +395,8 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                       <h5 className="font-bold text-slate-900 text-xs truncate">
                         {item.product.name}
                       </h5>
-                      <span className="text-xs text-[#D4021D] font-extrabold">
-                        Bs. {item.product.price}
+                      <span className="text-xs text-[#D4021D] font-extrabold tabular-nums">
+                        {formatCurrency(item.product.price).formatted}
                       </span>
                     </div>
 
@@ -648,8 +649,8 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                     <p>📱 <strong>Teléfono:</strong> {targetBusiness?.phone || '+58 412 1234567'}</p>
                     <p>🆔 <strong>RIF/C.I.:</strong> {targetBusiness?.rif || 'J-50123456-7'}</p>
                     <p>🏬 <strong>Beneficiario:</strong> {targetBusiness?.name || 'Comercio Afiliado ConForce'}</p>
-                    <p className="text-emerald-700 font-bold font-sans pt-1">
-                      Monto a transferir: Bs. {grandTotal.toLocaleString()}
+                    <p className="text-emerald-700 font-bold font-sans pt-1 tabular-nums">
+                      Monto a transferir: {formatCurrency(grandTotal).formatted}
                     </p>
                   </div>
                   <div>
@@ -772,12 +773,12 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
             <div className="space-y-1 text-xs text-slate-600">
               <div className="flex justify-between">
                 <span>Subtotal productos:</span>
-                <span className="font-semibold text-slate-900">Bs. ${cartSubtotal}</span>
+                <span className="font-semibold text-slate-900 tabular-nums">{formatCurrency(cartSubtotal).formatted}</span>
               </div>
               <div className="flex justify-between">
                 <span>Costo de entrega:</span>
-                <span className={deliveryFee === 0 ? 'text-slate-900 font-bold' : 'font-semibold text-slate-900'}>
-                  {deliveryFee === 0 ? 'Gratis' : `Bs. ${deliveryFee}`}
+                <span className={deliveryFee === 0 ? 'text-slate-900 font-bold' : 'font-semibold text-slate-900 tabular-nums'}>
+                  {deliveryFee === 0 ? 'Gratis' : formatCurrency(deliveryFee).formatted}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
@@ -787,11 +788,11 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                     5% Soporte & Garantía
                   </span>
                 </span>
-                <span className="font-semibold text-slate-900">Bs. ${serviceFee}</span>
+                <span className="font-semibold text-slate-900 tabular-nums">{formatCurrency(serviceFee).formatted}</span>
               </div>
               <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-200">
                 <span>Total a Pagar:</span>
-                <span className="text-[#D4021D]">Bs. ${grandTotal}</span>
+                <span className="text-[#D4021D] tabular-nums">{formatCurrency(grandTotal).formatted}</span>
               </div>
             </div>
 
@@ -814,7 +815,7 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                         <Smartphone className="w-4 h-4" />
                         <span>
                           {!currentUser ? 'Identificarme y Comprar vía App' : 'Comprar vía App Móvil'}{' '}
-                          (Bs. {grandTotal.toLocaleString('es-VE')})
+                          ({formatCurrency(grandTotal).formatted})
                         </span>
                       </>
                     )}
@@ -846,7 +847,7 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                         <MessageCircle className="w-4 h-4 fill-white" />
                         <span>
                           {!currentUser ? 'Identificarme y Enviar Pedido a WhatsApp' : 'Enviar Pedido al WhatsApp del Negocio'}{' '}
-                          (Bs. {grandTotal.toLocaleString('es-VE')})
+                          ({formatCurrency(grandTotal).formatted})
                         </span>
                       </>
                     )}

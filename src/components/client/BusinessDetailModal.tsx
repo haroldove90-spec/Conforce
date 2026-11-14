@@ -46,6 +46,7 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
     openExternalNavigation,
     openWhatsAppWithPrompt,
     exchangeRateUsd,
+    currencyDisplayMode,
     formatCurrency,
     userAddressLabel,
     currentUser,
@@ -288,17 +289,27 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
 
                       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                         <div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="font-extrabold text-slate-900 text-sm">
-                              Bs. {prod.price}
-                            </span>
-                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded border border-emerald-100">
-                              ${(exchangeRateUsd > 0 ? (prod.price / exchangeRateUsd).toFixed(2) : '0')} USD
-                            </span>
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            {(currencyDisplayMode === 'bs' || currencyDisplayMode === 'dual') && (
+                              <span className="font-extrabold text-slate-900 text-sm tabular-nums">
+                                {formatCurrency(prod.price).bs}
+                              </span>
+                            )}
+                            {(currencyDisplayMode === 'usd' || currencyDisplayMode === 'dual') && (
+                              <span
+                                className={
+                                  currencyDisplayMode === 'usd'
+                                    ? 'font-extrabold text-emerald-700 text-sm tabular-nums'
+                                    : 'text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 tabular-nums'
+                                }
+                              >
+                                {formatCurrency(prod.price).usd}
+                              </span>
+                            )}
                           </div>
                           {prod.originalPrice && (
-                            <span className="text-[10px] text-slate-400 line-through">
-                              Bs. {prod.originalPrice}
+                            <span className="text-[10px] text-slate-400 line-through tabular-nums">
+                              {formatCurrency(prod.originalPrice).formatted}
                             </span>
                           )}
                         </div>
@@ -609,13 +620,17 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
             <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
               <div>
                 <span className="text-[10px] text-slate-500 font-bold uppercase block">Precio Final del Artículo</span>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-base font-black text-slate-900">
-                    Bs. {calculateCustomizedPrice(customizingProduct)}
-                  </span>
-                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-1 rounded border border-emerald-100">
-                    ${(exchangeRateUsd > 0 ? (calculateCustomizedPrice(customizingProduct) / exchangeRateUsd).toFixed(2) : '0')} USD
-                  </span>
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  {(currencyDisplayMode === 'bs' || currencyDisplayMode === 'dual') && (
+                    <span className="text-base font-black text-slate-900 tabular-nums">
+                      {formatCurrency(calculateCustomizedPrice(customizingProduct)).bs}
+                    </span>
+                  )}
+                  {(currencyDisplayMode === 'usd' || currencyDisplayMode === 'dual') && (
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 tabular-nums">
+                      {formatCurrency(calculateCustomizedPrice(customizingProduct)).usd}
+                    </span>
+                  )}
                 </div>
               </div>
 
