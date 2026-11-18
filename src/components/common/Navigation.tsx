@@ -74,11 +74,13 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
     }
   };
 
+  const isAdmin = currentUser?.role === 'admin';
+
   // Active pending orders count for badge (scoped to seller business when in seller role)
   const pendingOrdersCount = orders.filter(
     o =>
       (currentRole !== 'seller' || !currentSellerBusiness || o.businessId === currentSellerBusiness.id) &&
-      (o.status === 'preparing' || o.status === 'ready' || o.status === 'on_the_way')
+      (o.status === 'pending_confirmation' || o.status === 'preparing' || o.status === 'ready' || o.status === 'on_the_way')
   ).length;
 
   // Desktop Left Sidebar navigation items by role
@@ -97,16 +99,19 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
         return [
           { id: 'overview', label: 'Dashboard General', icon: <LayoutDashboard className="w-4 h-4" /> },
           { id: 'sellers', label: 'Gestión de Negocios', icon: <Store className="w-4 h-4" /> },
+          { id: 'tariffs', label: 'Tarifas y Comisiones', icon: <DollarSign className="w-4 h-4" /> },
+          { id: 'marketing', label: 'Cupones y Marketing', icon: <Sparkles className="w-4 h-4" /> },
+          { id: 'support', label: 'Soporte y Reembolsos', icon: <ShieldCheck className="w-4 h-4" /> },
           { id: 'whatsapp', label: 'WhatsApp & Bot IA', icon: <MessageSquare className="w-4 h-4" /> },
           { id: 'map', label: 'Mapa & Navegación', icon: <Layers className="w-4 h-4" /> },
-          { id: 'finances', label: 'Finanzas & Comisiones', icon: <DollarSign className="w-4 h-4" /> }
+          { id: 'finances', label: 'Finanzas & Liquidación', icon: <BarChart3 className="w-4 h-4" /> }
         ];
       case 'driver':
         return [
           { id: 'deliveries', label: 'Despachos en Vivo', icon: <Bike className="w-4 h-4 text-emerald-400" /> },
           { id: 'history', label: 'Historial de Carreras', icon: <Clock className="w-4 h-4" /> },
           { id: 'wallet', label: 'Billetera Pago Móvil', icon: <DollarSign className="w-4 h-4 text-emerald-400" /> },
-          { id: 'profile', label: 'Mi Moto y Licencia', icon: <User className="w-4 h-4" /> }
+          { id: 'profile', label: 'Mi Vehículo y Licencia', icon: <User className="w-4 h-4" /> }
         ];
       default:
         return [
@@ -114,7 +119,9 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
           { id: 'map', label: 'Mapa de Cobertura', icon: <MapIcon className="w-4 h-4 text-[#D4021D]" /> },
           { id: 'orders', label: 'Mis Pedidos', icon: <Clock className="w-4 h-4" />, badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined },
           { id: 'account', label: 'Mi Cuenta & Direcciones', icon: <User className="w-4 h-4" /> },
-          { id: 'roles_hub', label: 'Portal de Roles', icon: <Sparkles className="w-4 h-4 text-amber-500" /> }
+          ...(isAdmin
+            ? [{ id: 'roles_hub', label: 'Portal de Roles', icon: <Sparkles className="w-4 h-4 text-amber-500" /> }]
+            : [])
         ];
     }
   };
@@ -133,17 +140,18 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
       case 'admin':
         return [
           { id: 'overview', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 text-white" /> },
-          { id: 'sellers', label: 'Sellers', icon: <Store className="w-5 h-5 text-white" /> },
-          { id: 'whatsapp', label: 'WhatsApp IA', icon: <MessageSquare className="w-5 h-5 text-white" /> },
-          { id: 'finances', label: 'Finanzas', icon: <DollarSign className="w-5 h-5 text-white" /> },
+          { id: 'sellers', label: 'Comercios', icon: <Store className="w-5 h-5 text-white" /> },
+          { id: 'tariffs', label: 'Tarifas', icon: <DollarSign className="w-5 h-5 text-white" /> },
+          { id: 'support', label: 'Soporte', icon: <ShieldCheck className="w-5 h-5 text-white" /> },
           { id: 'roles_modal', label: 'Roles', icon: <Sparkles className="w-5 h-5 text-white" /> }
         ];
       case 'driver':
         return [
           { id: 'deliveries', label: 'Despachos', icon: <Bike className="w-5 h-5 text-emerald-400" /> },
+          { id: 'history', label: 'Historial', icon: <Clock className="w-5 h-5 text-white" /> },
           { id: 'wallet', label: 'Billetera', icon: <DollarSign className="w-5 h-5 text-white" /> },
-          { id: 'profile', label: 'Mi Moto', icon: <User className="w-5 h-5 text-white" /> },
-          { id: 'roles_modal', label: 'Roles', icon: <Sparkles className="w-5 h-5 text-white" /> }
+          { id: 'profile', label: 'Vehículo', icon: <User className="w-5 h-5 text-white" /> },
+          ...(isAdmin ? [{ id: 'roles_modal', label: 'Roles', icon: <Sparkles className="w-5 h-5 text-white" /> }] : [])
         ];
       default:
         return [
@@ -209,27 +217,31 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Rol Activo
           </span>
-          <button
-            onClick={() => {
-              onOpenRoleModal();
-              if (isDrawer) setIsMobileMenuOpen(false);
-            }}
-            className="text-[10px] font-bold text-[#D4021D] hover:text-[#b50218] flex items-center gap-0.5 cursor-pointer"
-          >
-            Cambiar <ChevronRight className="w-3 h-3" />
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => {
+                onOpenRoleModal();
+                if (isDrawer) setIsMobileMenuOpen(false);
+              }}
+              className="text-[10px] font-bold text-[#D4021D] hover:text-[#b50218] flex items-center gap-0.5 cursor-pointer"
+            >
+              Cambiar <ChevronRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5">
           <div className="text-xl">
-            {currentRole === 'client' ? '🛒' : currentRole === 'seller' ? '🏪' : '⚡'}
+            {currentRole === 'client' ? '🛒' : currentRole === 'seller' ? '🏪' : currentRole === 'driver' ? '🛵' : '⚡'}
           </div>
           <div className="min-w-0">
             <p className="font-bold text-slate-900 text-xs truncate">
               {currentRole === 'client'
                 ? 'Cliente Final'
                 : currentRole === 'seller'
-                ? currentSellerBusiness?.name || 'Vendedor'
+                ? currentSellerBusiness?.name || 'Comercio Aliado'
+                : currentRole === 'driver'
+                ? 'Repartidor en Moto'
                 : 'Superadministrador'}
             </p>
             <p className="text-[10px] text-slate-500 truncate">
@@ -237,6 +249,8 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
                 ? 'Explorar & Comprar'
                 : currentRole === 'seller'
                 ? 'Panel de Comercio'
+                : currentRole === 'driver'
+                ? 'Entregas y Billetera'
                 : 'Control del Sistema'}
             </p>
           </div>
@@ -286,38 +300,42 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
           Herramientas y Accesos
         </span>
 
-        {/* Share Client Link Button */}
-        <button
-          onClick={handleCopyClientLink}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
-            copiedLink
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-          }`}
-          title="Copiar link directo a la tienda (/marketplace)"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {copiedLink ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <Share2 className="w-4 h-4 text-[#D4021D] shrink-0" />}
-            <span className="truncate">{copiedLink ? '¡Link Copiado!' : 'Copiar Link Clientes'}</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono shrink-0">/market</span>
-        </button>
+        {/* Share Client Link Button (hidden from Driver) */}
+        {currentRole !== 'driver' && (
+          <button
+            onClick={handleCopyClientLink}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+              copiedLink
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+            title="Copiar link directo a la tienda (/marketplace)"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              {copiedLink ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <Share2 className="w-4 h-4 text-[#D4021D] shrink-0" />}
+              <span className="truncate">{copiedLink ? '¡Link Copiado!' : 'Copiar Link Clientes'}</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono shrink-0">/market</span>
+          </button>
+        )}
 
-        {/* Download PDF Roles */}
-        <a
-          href="/Con_Force_Caracteristicas_Por_Rol.pdf"
-          download="Con_Force_Caracteristicas_Por_Rol.pdf"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-all cursor-pointer shadow-2xs"
-          title="Descargar Ficha Técnica PDF de Roles"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <FileText className="w-4 h-4 text-[#D4021D] shrink-0" />
-            <span className="truncate">Descargar PDF Roles</span>
-          </div>
-          <Download className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        </a>
+        {/* Download PDF Roles (Admin Only) */}
+        {isAdmin && (
+          <a
+            href="/Con_Force_Caracteristicas_Por_Rol.pdf"
+            download="Con_Force_Caracteristicas_Por_Rol.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-all cursor-pointer shadow-2xs"
+            title="Descargar Ficha Técnica PDF de Roles (Solo Admin)"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText className="w-4 h-4 text-[#D4021D] shrink-0" />
+              <span className="truncate">Descargar PDF Roles</span>
+            </div>
+            <Download className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          </a>
+        )}
 
         {/* WhatsApp Bot IA */}
         <button

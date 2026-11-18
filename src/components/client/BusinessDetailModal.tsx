@@ -41,6 +41,7 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
 }) => {
   const {
     products,
+    orders,
     addToCart,
     cart,
     calculateDistance,
@@ -61,18 +62,32 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
   const [selectedVariantOpt, setSelectedVariantOpt] = useState<ProductVariantOption | null>(null);
   const [selectedExtras, setSelectedExtras] = useState<SelectedExtra[]>([]);
+  const [selectedModifiersMap, setSelectedModifiersMap] = useState<
+    Record<string, { optionLabel: string; priceDelta: number }[]>
+  >({});
+  const [modifierValidationErr, setModifierValidationErr] = useState<string | null>(null);
   const [kitchenNotes, setKitchenNotes] = useState<string>('');
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
 
   const openCustomizeModal = (prod: Product) => {
     setCustomizingProduct(prod);
-    // default to first variant option if any
     if (prod.hasVariants && prod.variants?.[0]?.options?.length) {
       setSelectedVariantOpt(prod.variants[0].options[0]);
     } else {
       setSelectedVariantOpt(null);
     }
     setSelectedExtras([]);
+    // Pre-select first option for required modifierGroups if minSelect === 1
+    const initModMap: Record<string, { optionLabel: string; priceDelta: number }[]> = {};
+    (prod.modifierGroups || []).forEach((grp) => {
+      if (grp.required && grp.options.length > 0 && grp.minSelect <= 1) {
+        initModMap[grp.id] = [{ optionLabel: grp.options[0].label, priceDelta: grp.options[0].priceDelta }];
+      } else {
+        initModMap[grp.id] = [];
+      }
+    });
+    setSelectedModifiersMap(initModMap);
+    setModifierValidationErr(null);
     setKitchenNotes('');
     setActivePhotoIdx(0);
   };
@@ -80,7 +95,10 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
   const calculateCustomizedPrice = (prod: Product) => {
     const variantDelta = selectedVariantOpt?.priceDelta || 0;
     const extrasSum = selectedExtras.reduce((s, e) => s + e.price, 0);
-    return prod.price + variantDelta + extrasSum;
+    const modifiersSum = Object.values(selectedModifiersMap)
+      .flat()
+      .reduce((s, m) => s + m.priceDelta, 0);
+    return prod.price + variantDelta + extrasSum + modifiersSum;
   };
 
   const bizProducts = products.filter((p) => p.businessId === business.id);
@@ -250,6 +268,21 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
           ))}
         </div>
 
+        {/* Operational status alert when paused or closed */}
+        {(business.operationalStatus === 'paused' || business.operationalStatus === 'closed') && (
+          <div className={`px-4 py-2 text-xs font-bold flex items-center justify-between border-b ${
+            business.operationalStatus === 'paused'
+              ? 'bg-amber-50 text-amber-900 border-amber-200'
+              : 'bg-red-50 text-red-900 border-red-200'
+          }`}>
+            <span>
+              {business.operationalStatus === 'paused'
+                ? '⏸️ Tienda pausada temporalmente por alta demanda. Puedes explorar el menú.'
+                : '🔴 Tienda cerrada en este momento. Consulta sus horarios para pedir.'}
+            </span>
+          </div>
+        )}
+
         {/* Products Grid / Catalog */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
           {filteredProducts.length === 0 ? (
@@ -341,8 +374,8 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                             <span>WhatsApp</span>
                           </button>
 
-                          {/* If product has variants, ingredients or extras, open customizer modal */}
-                          {(prod.hasVariants || (prod.extras && prod.extras.length > 0) || (prod.ingredients && prod.ingredients.length > 0)) ? (
+                          {/* If product has variants, modifierGroups, ingredients or extras, open customizer modal */}
+                          {(prod.hasVariants || (prod.modifierGroups && prod.modifierGroups.length > 0) || (prod.extras && prod.extras.length > 0) || (prod.ingredients && prod.ingredients.length > 0)) ? (
                             <button
                               onClick={() => openCustomizeModal(prod)}
                               className="flex items-center gap-1 bg-red-50 hover:bg-[#D4021D] text-[#D4021D] hover:text-white border border-red-200 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
@@ -388,6 +421,33 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
               })}
             </div>
           )}
+
+          {/* Customer Reviews Section */}
+          {(() => {
+            const bizReviews = orders.filter((o) => o.businessId === business.id && o.review);
+            if (bizReviews.length === 0) return null;
+            return (
+              <div className="pt-4 mt-4 border-t border-slate-200 space-y-2.5">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                  <span>Reseñas de Clientes Verificados ({bizReviews.length})</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {bizReviews.slice(0, 4).map((revOrder) => (
+                    <div key={revOrder.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900 truncate">{revOrder.customerName}</span>
+                        <span className="text-amber-600 font-black">★ {revOrder.review!.rating}/5</span>
+                      </div>
+                      {revOrder.review!.comment && (
+                        <p className="text-[11px] text-slate-600 italic">"{revOrder.review!.comment}"</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Bottom Cart Shortcut bar if items exist */}
@@ -572,6 +632,69 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                 </div>
               )}
 
+              {/* Grupos de Modificadores Obligatorios y Opcionales */}
+              {customizingProduct.modifierGroups && customizingProduct.modifierGroups.length > 0 && (
+                <div className="space-y-3">
+                  {customizingProduct.modifierGroups.map((grp) => {
+                    const currentChosen = selectedModifiersMap[grp.id] || [];
+                    return (
+                      <div key={grp.id} className="space-y-1.5 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-800 uppercase">{grp.name}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            grp.required ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {grp.required ? `Obligatorio (${grp.minSelect}-${grp.maxSelect})` : `Opcional (máx ${grp.maxSelect})`}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {grp.options.map((opt) => {
+                            const isPicked = currentChosen.some((c) => c.optionLabel === opt.label);
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => {
+                                  setModifierValidationErr(null);
+                                  setSelectedModifiersMap((prev) => {
+                                    const arr = prev[grp.id] || [];
+                                    if (isPicked) {
+                                      return { ...prev, [grp.id]: arr.filter((x) => x.optionLabel !== opt.label) };
+                                    }
+                                    if (grp.maxSelect === 1) {
+                                      return { ...prev, [grp.id]: [{ optionLabel: opt.label, priceDelta: opt.priceDelta }] };
+                                    }
+                                    if (arr.length >= grp.maxSelect) {
+                                      return prev;
+                                    }
+                                    return { ...prev, [grp.id]: [...arr, { optionLabel: opt.label, priceDelta: opt.priceDelta }] };
+                                  });
+                                }}
+                                className={`p-2 rounded-xl border text-left flex items-center justify-between text-xs cursor-pointer transition-all ${
+                                  isPicked
+                                    ? 'bg-red-50 border-[#D4021D] text-slate-900 font-bold'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                }`}
+                              >
+                                <span className="truncate">{opt.label}</span>
+                                <span className="text-[10px] font-bold text-[#D4021D] shrink-0">
+                                  {opt.priceDelta > 0 ? `+Bs. ${opt.priceDelta}` : 'Incluido'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {modifierValidationErr && (
+                    <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
+                      {modifierValidationErr}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Adicionales y Extras Personalizables */}
               {customizingProduct.extras && customizingProduct.extras.length > 0 && (
                 <div className="space-y-2">
@@ -657,10 +780,22 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    for (const grp of customizingProduct.modifierGroups || []) {
+                      const count = (selectedModifiersMap[grp.id] || []).length;
+                      if (grp.required && count < Math.max(1, grp.minSelect)) {
+                        setModifierValidationErr(`Selecciona al menos ${Math.max(1, grp.minSelect)} opción en "${grp.name}".`);
+                        return;
+                      }
+                    }
                     const priceBs = calculateCustomizedPrice(customizingProduct);
                     const priceUsd = exchangeRateUsd > 0 ? Number((priceBs / exchangeRateUsd).toFixed(2)) : undefined;
                     const variantText = selectedVariantOpt ? `${customizingProduct.variants?.[0]?.name || 'Variante'}: ${selectedVariantOpt.label}` : undefined;
                     const extrasList = selectedExtras.map(e => `${e.name} (+Bs. ${e.price})`);
+                    (customizingProduct.modifierGroups || []).forEach((grp) => {
+                      (selectedModifiersMap[grp.id] || []).forEach((m) => {
+                        extrasList.push(`${grp.name}: ${m.optionLabel}${m.priceDelta > 0 ? ` (+Bs. ${m.priceDelta})` : ''}`);
+                      });
+                    });
                     if (kitchenNotes.trim()) {
                       extrasList.push(`Notas: "${kitchenNotes.trim()}"`);
                     }
@@ -689,6 +824,20 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    for (const grp of customizingProduct.modifierGroups || []) {
+                      const count = (selectedModifiersMap[grp.id] || []).length;
+                      if (grp.required && count < Math.max(1, grp.minSelect)) {
+                        setModifierValidationErr(`Selecciona al menos ${Math.max(1, grp.minSelect)} opción en "${grp.name}".`);
+                        return;
+                      }
+                    }
+                    const selectedModifiers = (customizingProduct.modifierGroups || []).flatMap((grp) =>
+                      (selectedModifiersMap[grp.id] || []).map((m) => ({
+                        groupName: grp.name,
+                        optionLabel: m.optionLabel,
+                        priceDelta: m.priceDelta
+                      }))
+                    );
                     addToCart(customizingProduct, 1, {
                       selectedVariantOption: selectedVariantOpt ? {
                         variantName: customizingProduct.variants?.[0]?.name || 'Variante',
@@ -696,6 +845,7 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                         priceDelta: selectedVariantOpt.priceDelta
                       } : undefined,
                       selectedExtras: selectedExtras.length > 0 ? selectedExtras : undefined,
+                      selectedModifiers: selectedModifiers.length > 0 ? selectedModifiers : undefined,
                       kitchenNotes: kitchenNotes.trim() || undefined
                     });
                     setCustomizingProduct(null);

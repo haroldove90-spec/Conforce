@@ -69,14 +69,20 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
     isMockDataCleared,
     exchangeRateUsd,
     formatCurrency,
-    requestProductOrder
+    requestProductOrder,
+    promoBanners,
+    tariffConfig
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'businesses' | 'products' | 'comparator'>('businesses');
   const [activeCategory, setActiveCategory] = useState<'all' | BusinessCategory | 'offers'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filterTopRated, setFilterTopRated] = useState(false);
+  const [filterOpenNow, setFilterOpenNow] = useState(false);
+  const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
   const [injectedToast, setInjectedToast] = useState(false);
   const [addedToast, setAddedToast] = useState<string | null>(null);
+  const [copiedCouponToast, setCopiedCouponToast] = useState<string | null>(null);
   const [copiedLinkToast, setCopiedLinkToast] = useState(false);
 
   const handleCopyLink = () => {
@@ -158,13 +164,43 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
         if (f === 'servicios' && (cat.includes('servicio') || cat.includes('técnico') || biz.tags.some(t => t.toLowerCase().includes('servicio')))) return true;
         return cat === f;
       })
-      .map((biz) => ({
-        ...biz,
-        distanceKm: calculateDistance(biz.coordinates),
-        schedule: getBusinessScheduleStatus(biz.openingHours)
-      }))
-      .sort((a, b) => a.distanceKm - b.distanceKm); // Closest first
-  }, [businesses, products, searchQuery, activeCategory, calculateDistance]);
+      .map((biz) => {
+        const baseSchedule = getBusinessScheduleStatus(biz.openingHours);
+        const schedule =
+          biz.operationalStatus === 'paused'
+            ? {
+                ...baseSchedule,
+                isOpen: false,
+                label: 'Pausado',
+                detail: 'Pausado temporalmente por alta demanda',
+                badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+                dotColorClass: 'bg-amber-500',
+                textClass: 'text-amber-700'
+              }
+            : biz.operationalStatus === 'closed'
+            ? {
+                ...baseSchedule,
+                isOpen: false,
+                label: 'Cerrado',
+                detail: 'Tienda cerrada temporalmente',
+                badgeClass: 'bg-red-50 text-red-700 border-red-200',
+                dotColorClass: 'bg-red-500',
+                textClass: 'text-red-700'
+              }
+            : baseSchedule;
+        return {
+          ...biz,
+          distanceKm: calculateDistance(biz.coordinates),
+          schedule
+        };
+      })
+      .filter((biz) => {
+        if (filterTopRated && biz.rating < 4.5) return false;
+        if (filterOpenNow && !biz.schedule.isOpen) return false;
+        return true;
+      })
+      .sort((a, b) => (sortBy === 'rating' ? b.rating - a.rating : a.distanceKm - b.distanceKm));
+  }, [businesses, products, searchQuery, activeCategory, calculateDistance, filterTopRated, filterOpenNow, sortBy]);
 
   // Filtered & Distance-Sorted Products (Closest first by store distance)
   const sortedFilteredProducts = useMemo(() => {
@@ -324,7 +360,47 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
         )}
       </div>
 
+      {/* Promo Banners Strip */}
+      {promoBanners.filter((b) => b.isActive).length > 0 && (
+        <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar pb-0.5">
+          {promoBanners
+            .filter((b) => b.isActive)
+            .map((banner) => (
+              <div
+                key={banner.id}
+                onClick={() => {
+                  if (banner.couponCode) {
+                    if (navigator.clipboard) navigator.clipboard.writeText(banner.couponCode);
+                    setCopiedCouponToast(banner.couponCode);
+                    setTimeout(() => setCopiedCouponToast(null), 2500);
+                  } else {
+                    setActiveCategory('offers');
+                  }
+                }}
+                className={`${banner.bgColor || 'bg-gradient-to-r from-[#D4021D] to-rose-700'} text-white rounded-2xl p-3 min-w-[260px] flex-1 shadow-xs cursor-pointer hover:opacity-95 transition-all`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-[9px] font-black uppercase bg-white/20 px-2 py-0.5 rounded-md">
+                    {banner.badge}
+                  </span>
+                  {banner.couponCode && (
+                    <span className="text-[10px] font-mono font-black bg-black/25 px-2 py-0.5 rounded-md">
+                      Cupón: {banner.couponCode}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-black leading-tight">{banner.title}</p>
+                <p className="text-[10px] text-white/90 mt-0.5">{banner.subtitle}</p>
+              </div>
+            ))}
+        </div>
+      )}
 
+      {copiedCouponToast && (
+        <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex items-center justify-between">
+          <span>✓ Cupón <strong>{copiedCouponToast}</strong> copiado. Pégalo en tu Carrito al pagar.</span>
+        </div>
+      )}
 
       {/* 2. Minimalist Search Bar with Intelligent Comparator Trigger */}
       <div className="relative">
@@ -510,6 +586,50 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
               <Flame className="w-3 h-3 fill-amber-500 text-amber-500" />
               <span>Ofertas ({offersCount})</span>
             </button>
+          </div>
+        )}
+
+        {/* Quick Operational Filters & Dynamic Tariff Indicator */}
+        {viewMode === 'businesses' && (
+          <div className="flex items-center justify-between gap-2 flex-wrap text-[11px]">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setFilterOpenNow((v) => !v)}
+                className={`px-2.5 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
+                  filterOpenNow
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                🟢 Abiertos ahora
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTopRated((v) => !v)}
+                className={`px-2.5 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
+                  filterTopRated
+                    ? 'bg-amber-400 text-slate-950 border-amber-400'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                ⭐ 4.5+ Calificación
+              </button>
+              {tariffConfig.dynamicMultiplier > 1 && (
+                <span className="px-2 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                  ⚡ {tariffConfig.dynamicLabel} ({tariffConfig.dynamicMultiplier}x)
+                </span>
+              )}
+            </div>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'distance' | 'rating')}
+              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-bold text-slate-700 focus:outline-none"
+            >
+              <option value="distance">📍 Más cercanos</option>
+              <option value="rating">⭐ Mejor calificados</option>
+            </select>
           </div>
         )}
       </div>

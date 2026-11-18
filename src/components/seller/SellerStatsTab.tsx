@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Business, Product, Order } from '../../types';
 import { useApp } from '../../context/AppContext';
 import {
@@ -10,7 +10,8 @@ import {
   XCircle,
   AlertTriangle,
   Star,
-  Plus
+  Plus,
+  Download
 } from 'lucide-react';
 
 interface SellerStatsTabProps {
@@ -27,19 +28,38 @@ export const SellerStatsTab: React.FC<SellerStatsTabProps> = ({
   onGoToCatalog
 }) => {
   const { formatCurrency } = useApp();
+  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'all'>('all');
 
-  const nonCancelledOrders = sellerOrders.filter((o) => o.status !== 'cancelled');
-  const deliveredOrders = sellerOrders.filter((o) => o.status === 'delivered');
-  const cancelledOrders = sellerOrders.filter((o) => o.status === 'cancelled');
+  const now = new Date();
+  const periodOrders = sellerOrders.filter((o) => {
+    if (periodFilter === 'all') return true;
+    const d = new Date(o.createdAt);
+    if (isNaN(d.getTime())) return true;
+    const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
+    if (periodFilter === 'today') return diffHours <= 24;
+    if (periodFilter === 'week') return diffHours <= 24 * 7;
+    if (periodFilter === 'month') return diffHours <= 24 * 30;
+    return true;
+  });
+
+  const nonCancelledOrders = periodOrders.filter((o) => o.status !== 'cancelled');
+  const deliveredOrders = periodOrders.filter((o) => o.status === 'delivered');
+  const cancelledOrders = periodOrders.filter((o) => o.status === 'cancelled');
 
   const grossSalesBs = nonCancelledOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
   const commissionRate = Number(biz.commissionRate ?? 10);
-  const commissionBs = Number(((grossSalesBs * commissionRate) / 100).toFixed(2));
-  const netRevenueBs = Math.max(0, Number((grossSalesBs - commissionBs).toFixed(2)));
+  const commissionBs = nonCancelledOrders.reduce((sum, o) => {
+    if (o.settlement) return sum + o.settlement.platformCommissionBs;
+    return sum + Number((((Number(o.subtotal) || Number(o.total) || 0) * commissionRate) / 100).toFixed(2));
+  }, 0);
+  const netRevenueBs = nonCancelledOrders.reduce((sum, o) => {
+    if (o.settlement) return sum + o.settlement.storeNetBs;
+    return sum + Math.max(0, Number(((Number(o.subtotal) || Number(o.total) || 0) * (1 - commissionRate / 100)).toFixed(2)));
+  }, 0);
   const avgTicketBs = nonCancelledOrders.length > 0 ? grossSalesBs / nonCancelledOrders.length : 0;
 
-  const whatsappOrdersCount = sellerOrders.filter((o) => o.orderChannel === 'whatsapp').length;
-  const appOrdersCount = sellerOrders.length - whatsappOrdersCount;
+  const whatsappOrdersCount = periodOrders.filter((o) => o.orderChannel === 'whatsapp').length;
+  const appOrdersCount = periodOrders.length - whatsappOrdersCount;
 
   const lowStockProducts = bizProducts.filter((p) => p.stockCount <= 5);
   const activeOffersCount = bizProducts.filter((p) => p.isOfferOfTheDay).length;
@@ -61,6 +81,34 @@ export const SellerStatsTab: React.FC<SellerStatsTabProps> = ({
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
+  const handleDownloadCsv = () => {
+    const headers = ['Orden', 'Fecha', 'Cliente', 'Canal', 'Estado', 'Subtotal Bs', 'Comision Plataforma Bs', 'Neto Comercio Bs', 'Total Orden Bs'];
+    const rows = periodOrders.map((o) => {
+      const sub = Number(o.subtotal || o.total || 0);
+      const comm = o.settlement ? o.settlement.platformCommissionBs : Number(((sub * commissionRate) / 100).toFixed(2));
+      const net = o.settlement ? o.settlement.storeNetBs : Number((sub - comm).toFixed(2));
+      return [
+        o.id,
+        `"${o.createdAt}"`,
+        `"${o.customerName}"`,
+        o.orderChannel || 'app',
+        o.status,
+        sub.toFixed(2),
+        comm.toFixed(2),
+        net.toFixed(2),
+        Number(o.total || 0).toFixed(2)
+      ].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `estado_cuenta_${biz.id}_${periodFilter}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -70,18 +118,49 @@ export const SellerStatsTab: React.FC<SellerStatsTabProps> = ({
             <span>Métricas y Finanzas de {biz.name}</span>
           </h3>
           <p className="text-xs text-slate-500">
-            Resumen en Bolívares (Bs.) y Dólares ($ USD) de ventas, pedidos e inventario.
+            Resumen en Bolívares (Bs.) y Dólares ($ USD) de ventas, comisiones y liquidación neta.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onGoToCatalog}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer self-start"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Gestionar Productos</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-[11px] font-bold">
+            {[
+              { id: 'today', label: 'Hoy' },
+              { id: 'week', label: 'Semana' },
+              { id: 'month', label: 'Mes' },
+              { id: 'all', label: 'Todo' }
+            ].map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPeriodFilter(p.id as any)}
+                className={`px-2.5 py-1 rounded-lg cursor-pointer transition-all ${
+                  periodFilter === p.id ? 'bg-[#D4021D] text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Estado de Cuenta CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onGoToCatalog}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Productos</span>
+          </button>
+        </div>
       </div>
 
       {/* Main KPI Grid */}
@@ -101,14 +180,14 @@ export const SellerStatsTab: React.FC<SellerStatsTabProps> = ({
 
         <div className="p-4 rounded-3xl bg-emerald-50/70 border border-emerald-200 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-xs text-emerald-800 font-bold">
-            <span>Ingreso Neto Comercio</span>
+            <span>Saldo Neto a Depositar</span>
             <TrendingUp className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-lg font-black text-emerald-950 tabular-nums">
             {formatCurrency(netRevenueBs).bs}
           </p>
           <p className="text-[11px] text-emerald-700 font-semibold">
-            Desc. comisión {commissionRate}%: {formatCurrency(commissionBs).bs}
+            Comisión {commissionRate}%: {formatCurrency(commissionBs).bs}
           </p>
         </div>
 
@@ -118,7 +197,7 @@ export const SellerStatsTab: React.FC<SellerStatsTabProps> = ({
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-lg font-black text-slate-900 tabular-nums">
-            {sellerOrders.length} pedidos
+            {periodOrders.length} pedidos
           </p>
           <p className="text-[11px] text-slate-600">
             ✓ {deliveredOrders.length} entregados · ✕ {cancelledOrders.length} cancelados

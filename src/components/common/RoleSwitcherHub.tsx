@@ -6,20 +6,20 @@ import { ShoppingBag, Store, ShieldCheck, MapPin, Sparkles, Bike } from 'lucide-
 export const RoleSwitcherHub: React.FC = () => {
   const {
     currentRole,
-    setCurrentRole,
-    setActiveClientTab,
-    setActiveSellerTab,
-    setActiveAdminTab,
-    setActiveDriverTab,
     currentUser,
     switchRole
   } = useApp();
 
+  const [roleError, setRoleError] = React.useState<string | null>(null);
   const isMasterAdmin = currentUser?.role === 'admin';
 
   const handleSelectRole = (role: Role) => {
+    setRoleError(null);
     if (role === currentRole) return;
-    switchRole(role);
+    const res = switchRole(role);
+    if (!res.allowed) {
+      setRoleError(res.message || 'Solo el Administrador Maestro puede alternar entre roles.');
+    }
   };
 
   const rolesConfig: { id: Role; name: string; icon: React.ReactNode; logo: string; color: string; badge: string }[] = [
@@ -79,16 +79,23 @@ export const RoleSwitcherHub: React.FC = () => {
           ) : (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Navegación por rol: Solo el Administrador Maestro puede alternar entre todos los roles
+              Acceso bloqueado: Solo el Superadministrador puede navegar entre múltiples roles
             </span>
           )}
         </div>
+
+        {roleError && (
+          <div className="mt-3 max-w-md mx-auto p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+            {roleError}
+          </div>
+        )}
       </div>
 
       {/* Grid: strictly 2 columns on mobile version, 4 columns on tablet/desktop */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {rolesConfig.map((item) => {
           const isSelected = currentRole === item.id;
+          const isAllowed = isMasterAdmin || item.id === currentRole;
           return (
             <button
               key={item.id}
@@ -96,7 +103,9 @@ export const RoleSwitcherHub: React.FC = () => {
               className={`relative flex flex-col items-center justify-center text-center p-5 rounded-2xl border transition-all duration-200 cursor-pointer shadow-xs ${item.color} ${
                 isSelected
                   ? 'ring-2 ring-[#D4021D] shadow-lg shadow-red-500/15 scale-[1.02]'
-                  : 'hover:scale-[1.01] hover:shadow-md'
+                  : isAllowed
+                  ? 'hover:scale-[1.01] hover:shadow-md'
+                  : 'opacity-55'
               }`}
             >
               {/* Logo / Icon */}
@@ -112,7 +121,7 @@ export const RoleSwitcherHub: React.FC = () => {
 
               {/* Minimal role badge */}
               <span className="mt-1 text-[11px] font-semibold text-slate-600">
-                {item.badge}
+                {isAllowed ? item.badge : 'Solo Admin'}
               </span>
 
               {isSelected && (

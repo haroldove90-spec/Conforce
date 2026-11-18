@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CurrencySelector } from '../common/CurrencySelector';
 import { SavedAddress } from '../../types';
+import { VENEZUELAN_CITIES } from '../../utils/venezuelaGeo';
 import {
   User,
   MapPin,
@@ -21,7 +22,10 @@ import {
   Edit3,
   LogIn,
   LogOut,
-  Bike
+  Bike,
+  Ticket,
+  Copy,
+  Check
 } from 'lucide-react';
 
 interface MyAccountViewProps {
@@ -36,11 +40,10 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
     setIsClientAuthModalOpen,
     openBusinessRegistration,
     openDriverRegistration,
-    setCurrentRole,
-    setActiveSellerTab,
-    setActiveDriverTab,
+    switchRole,
     userLocation,
     userAddressLabel,
+    setUserCustomLocation,
     detectUserLocation,
     isLocating,
     locationPermissionStatus,
@@ -48,6 +51,7 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
     savedAddresses,
     addSavedAddress,
     deleteSavedAddress,
+    coupons,
     installPWA,
     isAppInstalled
   } = useApp();
@@ -55,13 +59,16 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
   const [showAddAddressModal, setShowAddAddressModal] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newAddressText, setNewAddressText] = useState('');
+  const [newAddrCity, setNewAddrCity] = useState('Caracas');
+  const [newAddrCoords, setNewAddrCoords] = useState(userLocation || { lat: 10.4806, lng: -66.9036 });
+  const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
 
   const handleSaveAddress = () => {
     if (!newLabel.trim() || !newAddressText.trim()) return;
     addSavedAddress({
       label: newLabel.trim(),
-      address: newAddressText.trim(),
-      coordinates: userLocation || { lat: 10.4806, lng: -66.9036 },
+      address: `${newAddressText.trim()} (${newAddrCity})`,
+      coordinates: newAddrCoords || userLocation || { lat: 10.4806, lng: -66.9036 },
       isDefault: false
     });
     setNewLabel('');
@@ -177,11 +184,8 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
           <div className="flex items-center gap-2 shrink-0">
             {currentUser?.role === 'seller' ? (
               <button
-                onClick={() => {
-                  setCurrentRole('seller');
-                  setActiveSellerTab('orders');
-                }}
-                className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all"
+                onClick={() => switchRole('seller')}
+                className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all cursor-pointer"
               >
                 <span>Ir a Mi Panel de Negocio</span>
                 <ArrowRight className="w-4 h-4" />
@@ -226,11 +230,8 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
           <div className="flex items-center gap-2 shrink-0">
             {currentUser?.role === 'driver' ? (
               <button
-                onClick={() => {
-                  setCurrentRole('driver');
-                  setActiveDriverTab('deliveries');
-                }}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all"
+                onClick={() => switchRole('driver')}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all cursor-pointer"
               >
                 <span>Ir a Mi Panel de Moto</span>
                 <ArrowRight className="w-4 h-4" />
@@ -309,12 +310,54 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
         </div>
       </div>
 
+      {/* Active Promo Coupons & Payment Wallet */}
+      <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Ticket className="w-4 h-4 text-[#D4021D]" />
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Cupones Promocionales y Métodos de Pago</h3>
+              <p className="text-xs text-slate-500">Pago Móvil, Transferencia, Tarjeta o Efectivo al recibir · Aplica códigos en tu carrito</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {coupons.filter((c) => c.isActive).map((cpn) => (
+            <div
+              key={cpn.id}
+              className="p-3 rounded-2xl bg-red-50/50 border border-red-200/80 flex items-center justify-between gap-2"
+            >
+              <div className="min-w-0">
+                <span className="font-mono font-black text-xs text-[#D4021D] bg-white px-2 py-0.5 rounded-lg border border-red-200">
+                  {cpn.code}
+                </span>
+                <p className="text-[11px] text-slate-700 font-medium mt-1 truncate">{cpn.description}</p>
+                <span className="text-[10px] text-slate-400">Vence: {cpn.expiresAt}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(cpn.code);
+                  setCopiedCoupon(cpn.code);
+                  setTimeout(() => setCopiedCoupon(null), 1800);
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-800 flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                {copiedCoupon === cpn.code ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedCoupon === cpn.code ? 'Copiado' : 'Copiar'}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Frequent Saved Addresses */}
       <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-bold text-slate-900 text-sm">Direcciones Frecuentes</h3>
-            <p className="text-xs text-slate-500">Guarda tus destinos para pedidos rápidos</p>
+            <p className="text-xs text-slate-500">Guarda tus destinos con pin GPS para pedidos rápidos</p>
           </div>
 
           <button
@@ -339,16 +382,28 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
                 <div className="min-w-0">
                   <h4 className="font-bold text-slate-900 text-xs">{addr.label}</h4>
                   <p className="text-[11px] text-slate-500 truncate">{addr.address}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    {addr.coordinates.lat.toFixed(4)}, {addr.coordinates.lng.toFixed(4)}
+                  </p>
                 </div>
               </div>
 
-              <button
-                onClick={() => deleteSavedAddress(addr.id)}
-                className="text-slate-400 hover:text-red-500 p-2 transition-colors cursor-pointer"
-                title="Eliminar dirección"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setUserCustomLocation(addr.coordinates, addr.address)}
+                  className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-[10px] font-bold text-slate-700 hover:text-emerald-700 cursor-pointer"
+                >
+                  Usar ahora
+                </button>
+                <button
+                  onClick={() => deleteSavedAddress(addr.id)}
+                  className="text-slate-400 hover:text-red-500 p-2 transition-colors cursor-pointer"
+                  title="Eliminar dirección"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -380,7 +435,7 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
         )}
       </div>
 
-      {/* Add Address Modal */}
+      {/* Add Address Modal with Venezuelan City Pin Picker */}
       {showAddAddressModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-5 text-slate-900 shadow-2xl space-y-4">
@@ -397,25 +452,50 @@ export const MyAccountView: React.FC<MyAccountViewProps> = ({ onOpenRoleModal })
             <div className="space-y-3 text-xs">
               <div>
                 <label className="text-slate-600 text-[10px] uppercase font-bold">
-                  Etiqueta (Ej. Casa, Trabajo, Mamá)
+                  Etiqueta (Ej. Casa, Oficina, Mamá)
                 </label>
                 <input
                   type="text"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
-                  placeholder="Ej. Casa de campo 🏡"
+                  placeholder="Ej. Casa / Oficina"
                   className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-[#D4021D]"
                 />
               </div>
 
               <div>
                 <label className="text-slate-600 text-[10px] uppercase font-bold">
-                  Dirección Completa
+                  Ciudad / Zona Pin en Venezuela
+                </label>
+                <select
+                  value={newAddrCity}
+                  onChange={(e) => {
+                    const cityName = e.target.value;
+                    setNewAddrCity(cityName);
+                    const found = VENEZUELAN_CITIES.find((c) => c.name === cityName);
+                    if (found) setNewAddrCoords({ lat: found.lat, lng: found.lng });
+                  }}
+                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-[#D4021D]"
+                >
+                  {VENEZUELAN_CITIES.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name} ({c.state})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-400 font-mono block mt-1">
+                  Pin GPS: {newAddrCoords.lat.toFixed(4)}, {newAddrCoords.lng.toFixed(4)}
+                </span>
+              </div>
+
+              <div>
+                <label className="text-slate-600 text-[10px] uppercase font-bold">
+                  Dirección Exacta y Referencias
                 </label>
                 <textarea
                   value={newAddressText}
                   onChange={(e) => setNewAddressText(e.target.value)}
-                  placeholder="Calle, número exterior/interior, colonia, referencias..."
+                  placeholder="Calle, edificio, piso/apto, punto de referencia..."
                   rows={3}
                   className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 resize-none focus:outline-none focus:border-[#D4021D]"
                 />

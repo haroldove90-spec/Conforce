@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS public.drivers (
     email TEXT,
     phone TEXT NOT NULL,
     ci_dni TEXT NOT NULL,
+    vehicle_type TEXT NOT NULL DEFAULT 'moto',
     motorcycle_brand_model TEXT NOT NULL,
     plate_number TEXT NOT NULL,
     driver_license TEXT,
@@ -99,6 +100,9 @@ CREATE TABLE IF NOT EXISTS public.drivers (
     rating NUMERIC(3,1) NOT NULL DEFAULT 5.0,
     total_deliveries INTEGER NOT NULL DEFAULT 0,
     earnings_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+    tips_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+    bonus_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+    cash_collected_debt NUMERIC(12,2) NOT NULL DEFAULT 0,
     bank_name TEXT DEFAULT 'Banesco (0134)',
     bank_phone TEXT,
     bank_id_number TEXT,
@@ -119,6 +123,7 @@ ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS username TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS ci_dni TEXT;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS vehicle_type TEXT DEFAULT 'moto';
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS motorcycle_brand_model TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS plate_number TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS driver_license TEXT;
@@ -128,6 +133,9 @@ ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS current_coords JSONB;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS rating NUMERIC(3,1) DEFAULT 5.0;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS total_deliveries INTEGER DEFAULT 0;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS earnings_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS tips_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bonus_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS cash_collected_debt NUMERIC(12,2) DEFAULT 0;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT 'Banesco (0134)';
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_phone TEXT;
 ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bank_id_number TEXT;
@@ -282,18 +290,35 @@ CREATE TABLE IF NOT EXISTS public.businesses (
     email TEXT,
     city TEXT DEFAULT 'Caracas',
     state TEXT DEFAULT 'Distrito Capital',
+    description TEXT,
+    whatsapp TEXT,
+    operational_status TEXT NOT NULL DEFAULT 'open',
+    paused_until TIMESTAMPTZ,
+    weekly_schedule JSONB DEFAULT '{}'::jsonb,
+    holiday_closures JSONB DEFAULT '[]'::jsonb,
+    custom_categories JSONB DEFAULT '[]'::jsonb,
+    payment_info JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Si la tabla ya existía, remover restricciones restrictivas antiguas
 ALTER TABLE public.businesses DROP CONSTRAINT IF EXISTS businesses_category_check;
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE public.users ADD CONSTRAINT users_role_check CHECK (role IN ('client', 'seller', 'admin', 'driver'));
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS is_sponsor BOOLEAN DEFAULT false;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS owner_username TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS rif TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Caracas';
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS state TEXT DEFAULT 'Distrito Capital';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS whatsapp TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS operational_status TEXT DEFAULT 'open';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS paused_until TIMESTAMPTZ;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS weekly_schedule JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS holiday_closures JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS custom_categories JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS payment_info JSONB DEFAULT '{}'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_businesses_category ON public.businesses(category);
 CREATE INDEX IF NOT EXISTS idx_businesses_is_active ON public.businesses(is_active);
@@ -317,8 +342,11 @@ CREATE TABLE IF NOT EXISTS public.products (
     tags TEXT[] NOT NULL DEFAULT '{}',
     is_offer_of_the_day BOOLEAN NOT NULL DEFAULT false,
     is_boosted BOOLEAN NOT NULL DEFAULT false,
+    boost_tier TEXT,
+    boost_expires_at TIMESTAMPTZ,
     has_variants BOOLEAN DEFAULT false,
     variants JSONB DEFAULT '[]'::JSONB,
+    modifier_groups JSONB DEFAULT '[]'::JSONB,
     ingredients JSONB DEFAULT '[]'::JSONB,
     extras JSONB DEFAULT '[]'::JSONB,
     preparation_time TEXT,
@@ -329,9 +357,12 @@ CREATE TABLE IF NOT EXISTS public.products (
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_usd NUMERIC(12, 2) DEFAULT 0;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::JSONB;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_boosted BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS boost_tier TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS boost_expires_at TIMESTAMPTZ;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_offer_of_the_day BOOLEAN DEFAULT false;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN DEFAULT false;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS variants JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS modifier_groups JSONB DEFAULT '[]'::JSONB;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS ingredients JSONB DEFAULT '[]'::JSONB;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS extras JSONB DEFAULT '[]'::JSONB;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS preparation_time TEXT;
@@ -351,11 +382,15 @@ CREATE TABLE IF NOT EXISTS public.orders (
     business_logo TEXT NOT NULL DEFAULT '',
     customer_name TEXT NOT NULL DEFAULT '',
     customer_phone TEXT NOT NULL DEFAULT '',
+    customer_username TEXT,
     items JSONB NOT NULL DEFAULT '[]'::jsonb,
     subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
     delivery_fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
     service_fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
     service_fee_rate NUMERIC(5, 4) NOT NULL DEFAULT 0.05,
+    promo_code TEXT,
+    discount_amount NUMERIC(10, 2) DEFAULT 0,
+    driver_tip NUMERIC(10, 2) DEFAULT 0,
     total NUMERIC(10, 2) NOT NULL DEFAULT 0,
     delivery_type TEXT NOT NULL CHECK (delivery_type IN ('pickup', 'delivery')),
     delivery_address TEXT NOT NULL DEFAULT '',
@@ -370,17 +405,31 @@ CREATE TABLE IF NOT EXISTS public.orders (
     driver_step TEXT,
     driver_assigned_at TIMESTAMPTZ,
     driver_delivered_at TIMESTAMPTZ,
+    prep_time_minutes INTEGER,
+    accepted_at TIMESTAMPTZ,
+    delivery_pin TEXT,
+    delivery_proof_photo TEXT,
+    cash_collected_by_driver NUMERIC(10, 2),
+    refund_amount NUMERIC(10, 2),
+    refund_reason TEXT,
     cancellation_reason TEXT,
     review JSONB,
+    settlement JSONB,
     order_channel TEXT NOT NULL DEFAULT 'app' CHECK (order_channel IN ('app', 'whatsapp')),
-    status TEXT NOT NULL DEFAULT 'preparing' CHECK (status IN ('preparing', 'ready', 'on_the_way', 'delivered', 'cancelled')),
+    status TEXT NOT NULL DEFAULT 'pending_confirmation' CHECK (status IN ('pending_confirmation', 'preparing', 'ready', 'on_the_way', 'delivered', 'cancelled')),
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE public.orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending_confirmation', 'preparing', 'ready', 'on_the_way', 'delivered', 'cancelled'));
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_username TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS service_fee NUMERIC(10, 2) DEFAULT 0;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS service_fee_rate NUMERIC(5, 4) DEFAULT 0.05;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS promo_code TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_tip NUMERIC(10, 2) DEFAULT 0;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_reference TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_id TEXT;
@@ -390,8 +439,16 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_vehicle TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_step TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_assigned_at TIMESTAMPTZ;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_delivered_at TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_pin TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_proof_photo TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cash_collected_by_driver NUMERIC(10, 2);
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(10, 2);
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS refund_reason TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS review JSONB;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS settlement JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_orders_business_id ON public.orders(business_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
@@ -452,11 +509,16 @@ CREATE TABLE IF NOT EXISTS public.users (
     username TEXT UNIQUE NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('admin', 'seller', 'client')),
+    role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('admin', 'seller', 'client', 'driver')),
+    status TEXT NOT NULL DEFAULT 'active',
     business_id TEXT REFERENCES public.businesses(id) ON DELETE SET NULL,
     phone TEXT,
+    address TEXT,
+    department TEXT,
     avatar TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true,
+    is_sponsor BOOLEAN DEFAULT false,
+    last_login TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -467,10 +529,15 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'client';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS business_id TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS department TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_sponsor BOOLEAN DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Quitar restricciones de clave foránea estricta que puedan bloquear inserciones
@@ -547,6 +614,123 @@ ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT 
 CREATE INDEX IF NOT EXISTS idx_employees_department ON public.employees(department);
 CREATE INDEX IF NOT EXISTS idx_employees_is_active ON public.employees(is_active);
 
+-- ------------------------------------------------------------------------------
+-- 10. TABLA: drivers (Flota de Repartidores / Motorizados / Bici / Auto)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.drivers (
+    id TEXT PRIMARY KEY DEFAULT ('drv_' || substring(gen_random_uuid()::TEXT from 1 for 8)),
+    user_id TEXT,
+    full_name TEXT NOT NULL,
+    username TEXT NOT NULL,
+    email TEXT,
+    phone TEXT NOT NULL,
+    ci_dni TEXT NOT NULL,
+    vehicle_type TEXT NOT NULL DEFAULT 'moto',
+    motorcycle_brand_model TEXT NOT NULL,
+    plate_number TEXT NOT NULL,
+    driver_license TEXT,
+    status TEXT NOT NULL DEFAULT 'pending_approval',
+    is_available BOOLEAN NOT NULL DEFAULT false,
+    current_coords JSONB,
+    rating NUMERIC(3,1) NOT NULL DEFAULT 5.0,
+    total_deliveries INTEGER NOT NULL DEFAULT 0,
+    earnings_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+    tips_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+    bonus_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+    cash_collected_debt NUMERIC(12,2) NOT NULL DEFAULT 0,
+    bank_name TEXT DEFAULT 'Banesco (0134)',
+    bank_phone TEXT,
+    bank_id_number TEXT,
+    city TEXT DEFAULT 'Caracas',
+    avatar_url TEXT,
+    id_document_photo TEXT,
+    license_photo TEXT,
+    motorcycle_photo TEXT,
+    vehicle_doc_photo TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS vehicle_type TEXT DEFAULT 'moto';
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS tips_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS bonus_balance NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS cash_collected_debt NUMERIC(12,2) DEFAULT 0;
+
+-- ------------------------------------------------------------------------------
+-- 11. TABLA: platform_tariffs (Motor de Tarifas y Comisiones Globales)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.platform_tariffs (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    base_delivery_fee_bs NUMERIC(10, 2) NOT NULL DEFAULT 35,
+    per_km_fee_bs NUMERIC(10, 2) NOT NULL DEFAULT 15,
+    dynamic_multiplier NUMERIC(4, 2) NOT NULL DEFAULT 1.0,
+    dynamic_label TEXT NOT NULL DEFAULT 'Tarifa Normal',
+    default_commission_rate NUMERIC(5, 2) NOT NULL DEFAULT 10,
+    service_fee_rate_percent NUMERIC(5, 2) NOT NULL DEFAULT 5,
+    order_accept_timeout_min INTEGER NOT NULL DEFAULT 5,
+    driver_offer_timeout_sec INTEGER NOT NULL DEFAULT 45,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ------------------------------------------------------------------------------
+-- 12. TABLA: promo_coupons y promo_banners (Marketing y Cupones)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.promo_coupons (
+    id TEXT PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    discount_type TEXT NOT NULL CHECK (discount_type IN ('percent', 'fixed_bs', 'free_delivery')),
+    discount_value NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    min_order_bs NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    max_uses INTEGER NOT NULL DEFAULT 100,
+    used_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL DEFAULT '2026-12-31',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.promo_banners (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    subtitle TEXT NOT NULL DEFAULT '',
+    badge TEXT NOT NULL DEFAULT 'PROMO',
+    coupon_code TEXT,
+    bg_color TEXT NOT NULL DEFAULT '#D4021D',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ------------------------------------------------------------------------------
+-- 13. TABLA: driver_payouts (Solicitudes de Retiro Pago Móvil de Repartidores)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.driver_payouts (
+    id TEXT PRIMARY KEY,
+    driver_id TEXT NOT NULL,
+    driver_name TEXT NOT NULL,
+    amount_bs NUMERIC(12, 2) NOT NULL,
+    bank_name TEXT NOT NULL,
+    bank_phone TEXT NOT NULL,
+    bank_id_number TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'rejected')),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+
+-- ------------------------------------------------------------------------------
+-- 14. TABLA: support_tickets (Soporte y Resolución de Conflictos)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.support_tickets (
+    id TEXT PRIMARY KEY,
+    order_id TEXT,
+    requester_name TEXT NOT NULL,
+    requester_role TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'refunded')),
+    resolution_note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ==============================================================================
 -- POLÍTICAS DE SEGURIDAD (ROW LEVEL SECURITY - RLS)
 -- ==============================================================================
@@ -560,6 +744,12 @@ ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.platform_tariffs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promo_coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.driver_payouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Public access for businesses" ON public.businesses;
 CREATE POLICY "Public access for businesses" ON public.businesses
@@ -597,6 +787,30 @@ DROP POLICY IF EXISTS "Public access for employees" ON public.employees;
 CREATE POLICY "Public access for employees" ON public.employees
     FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Public access for drivers" ON public.drivers;
+CREATE POLICY "Public access for drivers" ON public.drivers
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public access for platform_tariffs" ON public.platform_tariffs;
+CREATE POLICY "Public access for platform_tariffs" ON public.platform_tariffs
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public access for promo_coupons" ON public.promo_coupons;
+CREATE POLICY "Public access for promo_coupons" ON public.promo_coupons
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public access for promo_banners" ON public.promo_banners;
+CREATE POLICY "Public access for promo_banners" ON public.promo_banners
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public access for driver_payouts" ON public.driver_payouts;
+CREATE POLICY "Public access for driver_payouts" ON public.driver_payouts
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public access for support_tickets" ON public.support_tickets;
+CREATE POLICY "Public access for support_tickets" ON public.support_tickets
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
 -- ==============================================================================
 -- HABILITAR TIEMPO REAL (REALTIME) EN SUPABASE
 -- ==============================================================================
@@ -619,6 +833,24 @@ BEGIN
         WHERE pubname = 'supabase_realtime' AND tablename = 'businesses'
     ) THEN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.businesses;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'drivers'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.drivers;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'support_tickets'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.support_tickets;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'driver_payouts'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_payouts;
     END IF;
 END $$;
 
@@ -941,4 +1173,21 @@ ON CONFLICT (id) DO UPDATE SET
     business_id = EXCLUDED.business_id,
     salary = EXCLUDED.salary,
     is_active = EXCLUDED.is_active;
+
+-- ------------------------------------------------------------------------------
+-- SEED DATA: Tarifas Globales, Cupones Promocionales y Repartidores Iniciales
+-- ------------------------------------------------------------------------------
+INSERT INTO public.platform_tariffs (
+    id, base_delivery_fee_bs, per_km_fee_bs, dynamic_multiplier, dynamic_label,
+    default_commission_rate, service_fee_rate_percent, order_accept_timeout_min, driver_offer_timeout_sec
+) VALUES (
+    'default', 35.0, 15.0, 1.0, 'Tarifa Normal', 10.0, 5.0, 5, 45
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.promo_coupons (id, code, description, discount_type, discount_value, min_order_bs, max_uses, used_count, expires_at, is_active)
+VALUES
+    ('cpn-bienvenido', 'CONFORCE15', '15% de descuento en tu pedido', 'percent', 15.0, 120.0, 500, 0, '2026-12-31', true),
+    ('cpn-enviogratis', 'ENVIOGRATIS', 'Delivery gratis en pedidos desde Bs. 200', 'free_delivery', 0.0, 200.0, 300, 0, '2026-12-31', true)
+ON CONFLICT (id) DO NOTHING;
 `;

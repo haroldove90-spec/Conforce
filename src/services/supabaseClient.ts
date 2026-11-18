@@ -10,7 +10,11 @@ import {
   UserAccount,
   ClientProfile,
   Role,
-  DriverProfile
+  DriverProfile,
+  PromoCoupon,
+  PlatformTariffConfig,
+  DriverPayoutRequest,
+  SupportTicket
 } from '../types';
 import { sanitizeBusinessCoordinates } from '../utils/venezuelaGeo';
 import { resolveProductImage } from '../utils/imageUtils';
@@ -77,6 +81,11 @@ export function mapBusinessFromDB(row: any): Business {
     address: row.address || '',
     coordinates: sanitized.coordinates,
     openingHours: row.opening_hours || '08:00 AM - 07:00 PM',
+    operationalStatus: (row.operational_status as any) || 'open',
+    pausedUntil: row.paused_until || undefined,
+    weeklySchedule: safeJsonParse(row.weekly_schedule, undefined),
+    holidayClosures: safeJsonParse(row.holiday_closures, undefined),
+    customCategories: safeJsonParse(row.custom_categories, undefined),
     rating: Number(row.rating ?? 5.0),
     reviewsCount: Number(row.reviews_count ?? 0),
     isVerified: Boolean(row.is_verified ?? true),
@@ -91,7 +100,8 @@ export function mapBusinessFromDB(row: any): Business {
     rif: row.rif || undefined,
     email: row.email || undefined,
     city: row.city || 'Caracas',
-    state: row.state || 'Distrito Capital'
+    state: row.state || 'Distrito Capital',
+    paymentInfo: safeJsonParse(row.payment_info, undefined)
   };
 }
 
@@ -126,6 +136,11 @@ export function mapBusinessToDB(biz: Business): any {
     address: biz.address || '',
     coordinates: biz.coordinates || { lat: 10.4806, lng: -66.9036 },
     opening_hours: biz.openingHours || '08:00 AM - 07:00 PM',
+    operational_status: biz.operationalStatus || 'open',
+    paused_until: biz.pausedUntil || null,
+    weekly_schedule: biz.weeklySchedule || null,
+    holiday_closures: biz.holidayClosures || [],
+    custom_categories: biz.customCategories || [],
     rating: Number(biz.rating ?? 5.0),
     reviews_count: Number(biz.reviewsCount ?? 0),
     is_verified: biz.isVerified ?? true,
@@ -140,7 +155,8 @@ export function mapBusinessToDB(biz: Business): any {
     rif: biz.rif || null,
     email: biz.email || null,
     city: biz.city || 'Caracas',
-    state: biz.state || 'Distrito Capital'
+    state: biz.state || 'Distrito Capital',
+    payment_info: biz.paymentInfo || null
   };
 }
 
@@ -164,6 +180,7 @@ export function mapProductFromDB(row: any): Product {
     isOfferOfTheDay: Boolean(row.is_offer_of_the_day ?? false),
     hasVariants: Boolean(row.has_variants ?? false),
     variants: safeJsonParse(row.variants, undefined),
+    modifierGroups: safeJsonParse(row.modifier_groups, undefined),
     ingredients: safeJsonParse(row.ingredients, undefined),
     extras: safeJsonParse(row.extras, undefined),
     preparationTime: row.preparation_time || undefined,
@@ -189,6 +206,7 @@ export function mapProductToDB(prod: Product): any {
     is_offer_of_the_day: prod.isOfferOfTheDay,
     has_variants: prod.hasVariants || false,
     variants: prod.variants || [],
+    modifier_groups: prod.modifierGroups || [],
     ingredients: prod.ingredients || [],
     extras: prod.extras || [],
     preparation_time: prod.preparationTime || null,
@@ -204,11 +222,15 @@ export function mapOrderFromDB(row: any): Order {
     businessLogo: row.business_logo || '',
     customerName: row.customer_name || '',
     customerPhone: row.customer_phone || '',
+    customerUsername: row.customer_username || undefined,
     items: Array.isArray(row.items) ? row.items : [],
     subtotal: Number(row.subtotal),
     deliveryFee: Number(row.delivery_fee ?? 0),
     serviceFee: Number(row.service_fee ?? 0),
     serviceFeeRate: Number(row.service_fee_rate ?? 0.05),
+    promoCode: row.promo_code || undefined,
+    discountAmount: Number(row.discount_amount ?? 0),
+    driverTip: Number(row.driver_tip ?? 0),
     total: Number(row.total),
     deliveryType: row.delivery_type,
     deliveryAddress: row.delivery_address || '',
@@ -223,8 +245,16 @@ export function mapOrderFromDB(row: any): Order {
     driverStep: row.driver_step || undefined,
     driverAssignedAt: row.driver_assigned_at || undefined,
     driverDeliveredAt: row.driver_delivered_at || undefined,
+    prepTimeMinutes: row.prep_time_minutes ? Number(row.prep_time_minutes) : undefined,
+    acceptedAt: row.accepted_at || undefined,
+    deliveryPin: row.delivery_pin || undefined,
+    deliveryProofPhoto: row.delivery_proof_photo || undefined,
+    cashCollectedByDriver: row.cash_collected_by_driver ? Number(row.cash_collected_by_driver) : undefined,
+    refundAmount: row.refund_amount ? Number(row.refund_amount) : undefined,
+    refundReason: row.refund_reason || undefined,
     cancellationReason: row.cancellation_reason || undefined,
     review: row.review ? (typeof row.review === 'string' ? JSON.parse(row.review) : row.review) : undefined,
+    settlement: safeJsonParse(row.settlement, undefined),
     orderChannel: row.order_channel || 'app',
     status: row.status,
     createdAt: row.created_at || 'Reciente',
@@ -240,11 +270,15 @@ export function mapOrderToDB(order: Order): any {
     business_logo: order.businessLogo,
     customer_name: order.customerName,
     customer_phone: order.customerPhone,
+    customer_username: order.customerUsername || null,
     items: order.items,
     subtotal: order.subtotal,
     delivery_fee: order.deliveryFee,
     service_fee: order.serviceFee || 0,
     service_fee_rate: order.serviceFeeRate || 0.05,
+    promo_code: order.promoCode || null,
+    discount_amount: order.discountAmount || 0,
+    driver_tip: order.driverTip || 0,
     total: order.total,
     delivery_type: order.deliveryType,
     delivery_address: order.deliveryAddress,
@@ -259,8 +293,16 @@ export function mapOrderToDB(order: Order): any {
     driver_step: order.driverStep || null,
     driver_assigned_at: order.driverAssignedAt || null,
     driver_delivered_at: order.driverDeliveredAt || null,
+    prep_time_minutes: order.prepTimeMinutes || null,
+    accepted_at: order.acceptedAt || null,
+    delivery_pin: order.deliveryPin || null,
+    delivery_proof_photo: order.deliveryProofPhoto || null,
+    cash_collected_by_driver: order.cashCollectedByDriver || 0,
+    refund_amount: order.refundAmount || 0,
+    refund_reason: order.refundReason || null,
     cancellation_reason: order.cancellationReason || null,
     review: order.review ? order.review : null,
+    settlement: order.settlement || null,
     order_channel: order.orderChannel || 'app',
     status: order.status,
     notes: order.notes || null,
@@ -355,7 +397,7 @@ export function mapUserFromDB(row: any): UserAccount {
     username: row.username,
     email: row.email,
     password: row.password || row.password_hash || '',
-    role: (row.role === 'admin' || row.role === 'seller' || row.role === 'client') ? (row.role as Role) : 'client',
+    role: (row.role === 'admin' || row.role === 'seller' || row.role === 'client' || row.role === 'driver') ? (row.role as Role) : 'client',
     status: (row.status === 'suspended' || row.is_active === false) ? 'suspended' : 'active',
     phone: row.phone || undefined,
     address: row.address || undefined,
@@ -543,9 +585,22 @@ export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
  */
 export async function upsertBusinessInSupabase(biz: Business): Promise<boolean> {
   try {
-    const { error } = await supabase.from('businesses').upsert(mapBusinessToDB(biz));
-    if (error) {
-      console.warn('Supabase upsertBusiness error:', error);
+    const full = mapBusinessToDB(biz);
+    const { error } = await supabase.from('businesses').upsert(full);
+    if (!error) return true;
+    // Fallback without extended columns if not yet migrated
+    const {
+      operational_status,
+      paused_until,
+      weekly_schedule,
+      holiday_closures,
+      custom_categories,
+      payment_info,
+      ...legacy
+    } = full;
+    const { error: err2 } = await supabase.from('businesses').upsert(legacy);
+    if (err2) {
+      console.warn('Supabase upsertBusiness error:', err2);
       return false;
     }
     return true;
@@ -574,12 +629,16 @@ export async function upsertProductInSupabaseDetailed(
   prod: Product
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    const { error } = await supabase.from('products').upsert(mapProductToDB(prod));
-    if (error) {
-      console.warn('Supabase upsertProduct error:', error);
-      return { success: false, message: error.message || 'Error al guardar en Supabase' };
-    }
-    return { success: true };
+    const full = mapProductToDB(prod);
+    const { error } = await supabase.from('products').upsert(full);
+    if (!error) return { success: true };
+
+    const { modifier_groups, ...legacy } = full;
+    const { error: err2 } = await supabase.from('products').upsert(legacy);
+    if (!err2) return { success: true };
+
+    console.warn('Supabase upsertProduct error:', err2);
+    return { success: false, message: err2.message || 'Error al guardar en Supabase' };
   } catch (err: any) {
     console.warn('Supabase upsertProduct exception:', err);
     return { success: false, message: err?.message || 'Error de conexión con Supabase' };
@@ -607,13 +666,42 @@ export async function deleteProductInSupabase(id: string): Promise<boolean> {
 }
 
 /**
- * Inserts an order into Supabase.
+ * Inserts an order into Supabase (with legacy-schema safe fallback if optional columns haven't been migrated yet).
  */
 export async function insertOrderInSupabase(order: Order): Promise<boolean> {
   try {
-    const { error } = await supabase.from('orders').insert(mapOrderToDB(order));
-    if (error) {
-      console.warn('Supabase insertOrder error:', error);
+    const fullRow = mapOrderToDB(order);
+    const { error } = await supabase.from('orders').insert(fullRow);
+    if (!error) return true;
+
+    // Fallback to core columns if new migration columns are not present yet
+    const coreRow: any = {
+      id: fullRow.id,
+      business_id: fullRow.business_id,
+      business_name: fullRow.business_name,
+      business_logo: fullRow.business_logo,
+      customer_name: fullRow.customer_name,
+      customer_phone: fullRow.customer_phone,
+      items: fullRow.items,
+      subtotal: fullRow.subtotal,
+      delivery_fee: fullRow.delivery_fee,
+      service_fee: fullRow.service_fee,
+      service_fee_rate: fullRow.service_fee_rate,
+      total: fullRow.total,
+      delivery_type: fullRow.delivery_type,
+      delivery_address: fullRow.delivery_address,
+      delivery_coordinates: fullRow.delivery_coordinates,
+      payment_method: fullRow.payment_method,
+      payment_reference: fullRow.payment_reference,
+      payment_proof_url: fullRow.payment_proof_url,
+      order_channel: fullRow.order_channel,
+      status: fullRow.status === 'pending_confirmation' ? 'preparing' : fullRow.status,
+      notes: fullRow.notes,
+      created_at: fullRow.created_at
+    };
+    const { error: fallbackErr } = await supabase.from('orders').insert(coreRow);
+    if (fallbackErr) {
+      console.warn('Supabase insertOrder error:', fallbackErr);
       return false;
     }
     return true;
@@ -642,20 +730,32 @@ export async function updateOrderStatusInSupabase(
 }
 
 /**
- * Updates full order record in Supabase (status, driver, review, etc.)
+ * Updates full order record in Supabase (status, driver, review, pin, settlement, etc.)
  */
 export async function updateOrderInSupabase(
   orderId: string,
-  updates: Partial<Order>
+  updates: Partial<Order> & Record<string, any>
 ): Promise<boolean> {
   try {
     const dbPayload: any = {};
     if (updates.status !== undefined) dbPayload.status = updates.status;
-    if (updates.driverName !== undefined) dbPayload.driver_name = updates.driverName;
-    if (updates.driverPhone !== undefined) dbPayload.driver_phone = updates.driverPhone;
-    if (updates.driverVehicle !== undefined) dbPayload.driver_vehicle = updates.driverVehicle;
-    if (updates.cancellationReason !== undefined) dbPayload.cancellation_reason = updates.cancellationReason;
+    if (updates.driverId !== undefined || updates.driver_id !== undefined) dbPayload.driver_id = updates.driverId ?? updates.driver_id;
+    if (updates.driverName !== undefined || updates.driver_name !== undefined) dbPayload.driver_name = updates.driverName ?? updates.driver_name;
+    if (updates.driverPhone !== undefined || updates.driver_phone !== undefined) dbPayload.driver_phone = updates.driverPhone ?? updates.driver_phone;
+    if (updates.driverVehicle !== undefined || updates.driver_vehicle !== undefined) dbPayload.driver_vehicle = updates.driverVehicle ?? updates.driver_vehicle;
+    if (updates.driverStep !== undefined || updates.driver_step !== undefined) dbPayload.driver_step = updates.driverStep ?? updates.driver_step;
+    if (updates.driverAssignedAt !== undefined || updates.driver_assigned_at !== undefined) dbPayload.driver_assigned_at = updates.driverAssignedAt ?? updates.driver_assigned_at;
+    if (updates.driverDeliveredAt !== undefined || updates.driver_delivered_at !== undefined) dbPayload.driver_delivered_at = updates.driverDeliveredAt ?? updates.driver_delivered_at;
+    if (updates.prepTimeMinutes !== undefined || updates.prep_time_minutes !== undefined) dbPayload.prep_time_minutes = updates.prepTimeMinutes ?? updates.prep_time_minutes;
+    if (updates.acceptedAt !== undefined || updates.accepted_at !== undefined) dbPayload.accepted_at = updates.acceptedAt ?? updates.accepted_at;
+    if (updates.deliveryPin !== undefined || updates.delivery_pin !== undefined) dbPayload.delivery_pin = updates.deliveryPin ?? updates.delivery_pin;
+    if (updates.deliveryProofPhoto !== undefined || updates.delivery_proof_photo !== undefined) dbPayload.delivery_proof_photo = updates.deliveryProofPhoto ?? updates.delivery_proof_photo;
+    if (updates.cashCollectedByDriver !== undefined || updates.cash_collected_by_driver !== undefined) dbPayload.cash_collected_by_driver = updates.cashCollectedByDriver ?? updates.cash_collected_by_driver;
+    if (updates.refundAmount !== undefined || updates.refund_amount !== undefined) dbPayload.refund_amount = updates.refundAmount ?? updates.refund_amount;
+    if (updates.refundReason !== undefined || updates.refund_reason !== undefined) dbPayload.refund_reason = updates.refundReason ?? updates.refund_reason;
+    if (updates.cancellationReason !== undefined || updates.cancellation_reason !== undefined) dbPayload.cancellation_reason = updates.cancellationReason ?? updates.cancellation_reason;
     if (updates.review !== undefined) dbPayload.review = updates.review;
+    if (updates.settlement !== undefined) dbPayload.settlement = updates.settlement;
     if (updates.paymentReference !== undefined) dbPayload.payment_reference = updates.paymentReference;
     if (updates.paymentProofUrl !== undefined) dbPayload.payment_proof_url = updates.paymentProofUrl;
 
@@ -663,7 +763,21 @@ export async function updateOrderInSupabase(
       .from('orders')
       .update(dbPayload)
       .eq('id', orderId);
-    return !error;
+    if (error) {
+      // Minimal safe update fallback
+      const minimal: any = {};
+      if (dbPayload.status) minimal.status = dbPayload.status;
+      if (dbPayload.driver_id !== undefined) minimal.driver_id = dbPayload.driver_id;
+      if (dbPayload.driver_name !== undefined) minimal.driver_name = dbPayload.driver_name;
+      if (dbPayload.driver_phone !== undefined) minimal.driver_phone = dbPayload.driver_phone;
+      if (dbPayload.driver_vehicle !== undefined) minimal.driver_vehicle = dbPayload.driver_vehicle;
+      if (dbPayload.driver_step !== undefined) minimal.driver_step = dbPayload.driver_step;
+      if (dbPayload.cancellation_reason !== undefined) minimal.cancellation_reason = dbPayload.cancellation_reason;
+      if (dbPayload.review !== undefined) minimal.review = dbPayload.review;
+      const { error: err2 } = await supabase.from('orders').update(minimal).eq('id', orderId);
+      return !err2;
+    }
+    return true;
   } catch (err) {
     console.warn('Error in updateOrderInSupabase:', err);
     return false;
@@ -888,8 +1002,8 @@ export async function insertUserInSupabase(
 ): Promise<{ success: boolean; error?: string; user?: any }> {
   try {
     let validRole = user.role || 'client';
-    // Ensure role matches check constraint (admin, seller, client)
-    if (validRole !== 'admin' && validRole !== 'seller' && validRole !== 'client') {
+    // Ensure role matches check constraint (admin, seller, client, driver)
+    if (validRole !== 'admin' && validRole !== 'seller' && validRole !== 'client' && validRole !== 'driver') {
       validRole = 'seller';
     }
 
@@ -1135,6 +1249,7 @@ export function mapDriverFromDB(row: any): DriverProfile {
     email: row.email || '',
     phone: row.phone || '',
     ciDni: row.ci_dni || '',
+    vehicleType: (row.vehicle_type as any) || 'moto',
     motorcycleBrandModel: row.motorcycle_brand_model || 'Moto Express',
     plateNumber: row.plate_number || 'S/P',
     driverLicense: row.driver_license || undefined,
@@ -1144,6 +1259,9 @@ export function mapDriverFromDB(row: any): DriverProfile {
     rating: Number(row.rating ?? 5.0),
     totalDeliveries: Number(row.total_deliveries ?? 0),
     earningsBalance: Number(row.earnings_balance ?? 0),
+    tipsBalance: Number(row.tips_balance ?? 0),
+    bonusBalance: Number(row.bonus_balance ?? 0),
+    cashCollectedDebt: Number(row.cash_collected_debt ?? 0),
     bankName: row.bank_name || undefined,
     bankPhone: row.bank_phone || undefined,
     bankIdNumber: row.bank_id_number || undefined,
@@ -1166,6 +1284,7 @@ export function mapDriverToDB(driver: DriverProfile): any {
     email: driver.email,
     phone: driver.phone,
     ci_dni: driver.ciDni,
+    vehicle_type: driver.vehicleType || 'moto',
     motorcycle_brand_model: driver.motorcycleBrandModel,
     plate_number: driver.plateNumber,
     driver_license: driver.driverLicense || null,
@@ -1175,6 +1294,9 @@ export function mapDriverToDB(driver: DriverProfile): any {
     rating: driver.rating,
     total_deliveries: driver.totalDeliveries,
     earnings_balance: driver.earningsBalance,
+    tips_balance: driver.tipsBalance || 0,
+    bonus_balance: driver.bonusBalance || 0,
+    cash_collected_debt: driver.cashCollectedDebt || 0,
     bank_name: driver.bankName || null,
     bank_phone: driver.bankPhone || null,
     bank_id_number: driver.bankIdNumber || null,
@@ -1196,7 +1318,6 @@ export async function fetchDriversFromSupabase(): Promise<DriverProfile[] | null
       .order('created_at', { ascending: false });
 
     if (error) {
-      // Table might not exist yet before SQL migration runs
       return null;
     }
     return (data || []).map(mapDriverFromDB);
@@ -1207,12 +1328,15 @@ export async function fetchDriversFromSupabase(): Promise<DriverProfile[] | null
 
 export async function upsertDriverInSupabase(driver: DriverProfile): Promise<boolean> {
   try {
+    const full = mapDriverToDB(driver);
     const { error } = await supabase
       .from('drivers')
-      .upsert(mapDriverToDB(driver), { onConflict: 'id' });
+      .upsert(full, { onConflict: 'id' });
     if (error) {
-      console.warn('Supabase upsertDriver error:', error);
-      return false;
+      // Fallback without extended columns if not yet migrated
+      const { vehicle_type, tips_balance, bonus_balance, cash_collected_debt, ...legacy } = full;
+      const { error: err2 } = await supabase.from('drivers').upsert(legacy, { onConflict: 'id' });
+      return !err2;
     }
     return true;
   } catch (err) {
@@ -1221,6 +1345,86 @@ export async function upsertDriverInSupabase(driver: DriverProfile): Promise<boo
   }
 }
 
+// ==========================================
+// PROMO COUPONS, TARIFFS, PAYOUTS & SUPPORT
+// ==========================================
 
+export async function upsertCouponInSupabase(coupon: PromoCoupon): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('promo_coupons').upsert({
+      id: coupon.id,
+      code: coupon.code,
+      description: coupon.description,
+      discount_type: coupon.discountType,
+      discount_value: coupon.discountValue,
+      min_order_bs: coupon.minOrderBs,
+      max_uses: coupon.maxUses,
+      used_count: coupon.usedCount,
+      expires_at: coupon.expiresAt,
+      is_active: coupon.isActive,
+      created_at: coupon.createdAt
+    }, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
 
+export async function upsertTariffConfigInSupabase(cfg: PlatformTariffConfig): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('platform_tariffs').upsert({
+      id: 'default',
+      base_delivery_fee_bs: cfg.baseDeliveryFeeBs,
+      per_km_fee_bs: cfg.perKmFeeBs,
+      dynamic_multiplier: cfg.dynamicMultiplier,
+      dynamic_label: cfg.dynamicLabel,
+      default_commission_rate: cfg.defaultCommissionRate,
+      service_fee_rate_percent: cfg.serviceFeeRatePercent,
+      order_accept_timeout_min: cfg.orderAcceptTimeoutMin,
+      driver_offer_timeout_sec: cfg.driverOfferTimeoutSec,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
 
+export async function upsertPayoutRequestInSupabase(req: DriverPayoutRequest): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('driver_payouts').upsert({
+      id: req.id,
+      driver_id: req.driverId,
+      driver_name: req.driverName,
+      amount_bs: req.amountBs,
+      bank_name: req.bankName,
+      bank_phone: req.bankPhone,
+      bank_id_number: req.bankIdNumber,
+      status: req.status,
+      requested_at: req.requestedAt,
+      processed_at: req.processedAt || null
+    }, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function upsertSupportTicketInSupabase(ticket: SupportTicket): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('support_tickets').upsert({
+      id: ticket.id,
+      order_id: ticket.orderId || null,
+      requester_name: ticket.requesterName,
+      requester_role: ticket.requesterRole,
+      subject: ticket.subject,
+      message: ticket.message,
+      status: ticket.status,
+      resolution_note: ticket.resolutionNote || null,
+      created_at: ticket.createdAt
+    }, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}

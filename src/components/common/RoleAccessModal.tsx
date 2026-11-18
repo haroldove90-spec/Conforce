@@ -14,6 +14,7 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
     currentUser,
     switchRole,
     setIsCorporateAuthModalOpen,
+    openCorporateAuth,
     setIsClientAuthModalOpen,
     openBusinessRegistration,
     openDriverRegistration,
@@ -60,11 +61,9 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
     const res = switchRole(targetRole);
     if (!res.allowed) {
       setRestrictionError(res.message || 'Acceso restringido para este rol.');
-      if (!currentUser) {
-        setTimeout(() => {
-          onClose();
-          setIsCorporateAuthModalOpen(true);
-        }, 1200);
+      if (!currentUser && (targetRole === 'admin' || targetRole === 'seller' || targetRole === 'driver')) {
+        onClose();
+        openCorporateAuth(targetRole);
       }
     } else {
       onClose();
@@ -149,7 +148,7 @@ export const RoleAccessModal: React.FC<RoleAccessModalProps> = ({ isOpen, onClos
               (isSeller && item.id === 'seller') ||
               (isClient && item.id === 'client') ||
               (isDriver && item.id === 'driver') ||
-              (!currentUser && (item.id === 'client' || item.id === 'driver'));
+              (!currentUser && item.id === 'client');
 
             return (
               <button

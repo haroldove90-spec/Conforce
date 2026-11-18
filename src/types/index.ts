@@ -18,6 +18,14 @@ export interface Coordinates {
   lng: number;
 }
 
+export type BusinessOperationalStatus = 'open' | 'paused' | 'closed';
+
+export interface DailySchedule {
+  open: string;
+  close: string;
+  closed?: boolean;
+}
+
 export interface Business {
   id: string;
   name: string;
@@ -30,6 +38,11 @@ export interface Business {
   address: string;
   coordinates: Coordinates;
   openingHours: string;
+  operationalStatus?: BusinessOperationalStatus;
+  pausedUntil?: string;
+  weeklySchedule?: Record<string, DailySchedule>;
+  holidayClosures?: string[]; // YYYY-MM-DD
+  customCategories?: string[];
   rating: number;
   reviewsCount: number;
   isVerified: boolean;
@@ -68,6 +81,15 @@ export interface ProductVariant {
   options: ProductVariantOption[];
 }
 
+export interface ProductModifierGroup {
+  id: string;
+  name: string; // e.g. "Término de la carne", "Salsas", "Contornos"
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: ProductVariantOption[];
+}
+
 export interface ProductExtra {
   id: string;
   name: string; // e.g. "Queso Cheddar Fundido", "Tocineta Crocante", "Salsa Especial"
@@ -100,9 +122,10 @@ export interface Product {
   preparationTime?: string; // e.g. "15-20 min"
   foodTags?: string[]; // e.g. ["picante", "vegetariano", "sin_gluten"]
 
-  // Variable product attributes
+  // Variable product attributes & modifier groups
   hasVariants?: boolean;
   variants?: ProductVariant[];
+  modifierGroups?: ProductModifierGroup[];
 }
 
 export interface BoostPlan {
@@ -139,11 +162,18 @@ export interface CartItem {
   businessId: string;
   selectedVariantOption?: { variantName: string; optionLabel: string; priceDelta: number };
   selectedExtras?: SelectedExtra[];
+  selectedModifiers?: { groupName: string; optionLabel: string; priceDelta: number }[];
   kitchenNotes?: string; // e.g. "Sin cebolla, salsa tártara aparte"
   itemTotalBs?: number; // total price per unit including variant & extras
 }
 
-export type OrderStatus = 'preparing' | 'ready' | 'on_the_way' | 'delivered' | 'cancelled';
+export type OrderStatus =
+  | 'pending_confirmation'
+  | 'preparing'
+  | 'ready'
+  | 'on_the_way'
+  | 'delivered'
+  | 'cancelled';
 export type DeliveryType = 'pickup' | 'delivery';
 export type PaymentMethod =
   | 'pago_movil'
@@ -152,12 +182,27 @@ export type PaymentMethod =
   | 'cash_on_delivery'
   | 'pos_terminal';
 export type OrderChannel = 'app' | 'whatsapp';
-export type DriverStep = 'assigned' | 'heading_to_store' | 'picked_up' | 'heading_to_client' | 'delivered';
+export type DriverStep =
+  | 'assigned'
+  | 'heading_to_store'
+  | 'picked_up'
+  | 'heading_to_client'
+  | 'arrived_at_client'
+  | 'delivered';
 
 export interface OrderReview {
-  rating: number; // 1-5
+  rating: number; // 1-5 (negocio)
   comment?: string;
+  driverRating?: number; // 1-5 (repartidor)
+  driverComment?: string;
   ratedAt: string;
+}
+
+export interface OrderSettlement {
+  storeNetBs: number;
+  driverPayoutBs: number;
+  platformCommissionBs: number;
+  settledAt: string;
 }
 
 export interface Order {
@@ -167,11 +212,15 @@ export interface Order {
   businessLogo: string;
   customerName: string;
   customerPhone: string;
+  customerUsername?: string;
   items: CartItem[];
   subtotal: number;
   deliveryFee: number;
   serviceFee?: number;
   serviceFeeRate?: number;
+  promoCode?: string;
+  discountAmount?: number;
+  driverTip?: number;
   total: number;
   deliveryType: DeliveryType;
   deliveryAddress: string;
@@ -186,12 +235,80 @@ export interface Order {
   driverStep?: DriverStep;
   driverAssignedAt?: string;
   driverDeliveredAt?: string;
+  prepTimeMinutes?: number;
+  acceptedAt?: string;
+  deliveryPin?: string;
+  deliveryProofPhoto?: string;
+  cashCollectedByDriver?: number;
+  refundAmount?: number;
+  refundReason?: string;
   cancellationReason?: string;
   review?: OrderReview;
+  settlement?: OrderSettlement;
   orderChannel?: OrderChannel;
   status: OrderStatus;
   createdAt: string;
   notes?: string;
+}
+
+export interface PromoCoupon {
+  id: string;
+  code: string;
+  description: string;
+  discountType: 'percent' | 'fixed_bs' | 'free_delivery';
+  discountValue: number; // e.g. 15 (%) or 50 (Bs.)
+  minOrderBs: number;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface PromoBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  badge: string;
+  couponCode?: string;
+  bgColor: string;
+  isActive: boolean;
+}
+
+export interface PlatformTariffConfig {
+  baseDeliveryFeeBs: number;
+  perKmFeeBs: number;
+  dynamicMultiplier: number; // 1.0 normal, 1.25 hora pico, 1.5 lluvia
+  dynamicLabel: string;
+  defaultCommissionRate: number;
+  serviceFeeRatePercent: number;
+  orderAcceptTimeoutMin: number;
+  driverOfferTimeoutSec: number;
+}
+
+export interface DriverPayoutRequest {
+  id: string;
+  driverId: string;
+  driverName: string;
+  amountBs: number;
+  bankName: string;
+  bankPhone: string;
+  bankIdNumber: string;
+  status: 'pending' | 'paid' | 'rejected';
+  requestedAt: string;
+  processedAt?: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  orderId?: string;
+  requesterName: string;
+  requesterRole: Role;
+  subject: string;
+  message: string;
+  status: 'open' | 'resolved' | 'refunded';
+  resolutionNote?: string;
+  createdAt: string;
 }
 
 export interface WhatsAppCampaign {
@@ -284,6 +401,7 @@ export interface EmployeeProfile {
 }
 
 export type DriverStatus = 'pending_approval' | 'active' | 'busy' | 'suspended';
+export type DriverVehicleType = 'moto' | 'bicicleta' | 'auto';
 
 export interface DriverProfile {
   id: string;
@@ -293,6 +411,7 @@ export interface DriverProfile {
   email: string;
   phone: string;
   ciDni: string;
+  vehicleType?: DriverVehicleType;
   motorcycleBrandModel: string;
   plateNumber: string;
   driverLicense?: string;
@@ -302,6 +421,9 @@ export interface DriverProfile {
   rating: number; // 1-5
   totalDeliveries: number;
   earningsBalance: number; // In Bs.
+  tipsBalance?: number;
+  bonusBalance?: number;
+  cashCollectedDebt?: number; // Efectivo cobrado contra entrega pendiente de cuadrar
   bankName?: string;
   bankPhone?: string;
   bankIdNumber?: string;
@@ -315,4 +437,3 @@ export interface DriverProfile {
   motorcyclePhoto?: string; // Foto de la Moto y Placa
   vehicleDocPhoto?: string; // Carnet de circulación / Título
 }
-

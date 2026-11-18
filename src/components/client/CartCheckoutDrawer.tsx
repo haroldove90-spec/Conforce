@@ -53,7 +53,10 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
     setIsClientAuthModalOpen,
     setClientAuthIntent,
     exchangeRateUsd,
-    formatCurrency
+    formatCurrency,
+    calculateDynamicDeliveryFee,
+    validateCoupon,
+    serviceFeeRate
   } = useApp();
 
   // Channel Selection: Default to 'whatsapp' (Los pedidos se realizan al WhatsApp del negocio)
@@ -68,6 +71,15 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
   const [customerName, setCustomerName] = useState<string>(currentUser?.name || 'Cliente');
   const [customerPhone, setCustomerPhone] = useState<string>(currentUser?.phone || '+58 412 1234567');
   const [orderNotes, setOrderNotes] = useState<string>('');
+  const [couponInput, setCouponInput] = useState<string>('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    valid: boolean;
+    code?: string;
+    discountBs: number;
+    freeDelivery: boolean;
+    message: string;
+  } | null>(null);
+  const [driverTip, setDriverTip] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [pendingAuthChannel, setPendingAuthChannel] = useState<OrderChannel | null>(null);
 
@@ -100,9 +112,27 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
   const primaryBusinessId = cart[0]?.businessId;
   const targetBusiness = businesses.find((b) => b.id === primaryBusinessId);
 
-  const deliveryFee = deliveryType === 'pickup' ? 0 : 35;
+  const dynamicDelivery = calculateDynamicDeliveryFee(targetBusiness?.coordinates, deliveryType);
+  const deliveryFee =
+    deliveryType === 'pickup' || (appliedCoupon?.valid && appliedCoupon.freeDelivery)
+      ? 0
+      : dynamicDelivery.feeBs;
+  const discountAmount = appliedCoupon?.valid ? appliedCoupon.discountBs : 0;
+  const effectiveTip = deliveryType === 'pickup' ? 0 : driverTip;
   const serviceFee = cartServiceFee;
-  const grandTotal = cartSubtotal + deliveryFee + serviceFee;
+  const grandTotal = Math.max(0, cartSubtotal - discountAmount) + deliveryFee + serviceFee + effectiveTip;
+
+  const handleApplyCoupon = () => {
+    if (!couponInput.trim()) return;
+    const res = validateCoupon(couponInput, cartSubtotal);
+    setAppliedCoupon({
+      valid: res.valid,
+      code: res.coupon?.code,
+      discountBs: res.discountBs,
+      freeDelivery: res.freeDelivery,
+      message: res.message
+    });
+  };
 
   const getResolvedAddress = () => {
     if (deliveryType === 'pickup') {
@@ -145,8 +175,9 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
       (s, item) => s + (item.itemTotalBs ?? item.product.price) * item.quantity,
       0
     );
-    const subsetServiceFee = subsetSubtotal > 0 ? Math.max(10, Math.round(subsetSubtotal * 0.05)) : 0;
-    const subsetTotal = subsetSubtotal + deliveryFee + subsetServiceFee;
+    const subsetServiceFee = subsetSubtotal > 0 ? Math.max(10, Math.round(subsetSubtotal * serviceFeeRate)) : 0;
+    const subsetDiscount = discountAmount > 0 && cartSubtotal > 0 ? Math.round((subsetSubtotal / cartSubtotal) * discountAmount) : 0;
+    const subsetTotal = Math.max(0, subsetSubtotal - subsetDiscount) + deliveryFee + subsetServiceFee + effectiveTip;
     const grandTotalUsd = exchangeRateUsd > 0 ? (subsetTotal / exchangeRateUsd).toFixed(2) : undefined;
     const subtotalUsd = exchangeRateUsd > 0 ? (subsetSubtotal / exchangeRateUsd).toFixed(2) : undefined;
 
@@ -159,6 +190,9 @@ export const CartCheckoutDrawer: React.FC<CartCheckoutDrawerProps> = ({
         let line = `• ${item.quantity}x *${item.product.name}* - Bs. ${itemLineTotal.toLocaleString('es-VE')}${itemUsd ? ` ($${itemUsd} USD)` : ''}`;
         if (item.selectedVariantOption) {
           line += `\n  🏷️ _${item.selectedVariantOption.variantName}: ${item.selectedVariantOption.optionLabel}_`;
+        }
+        if (item.selectedModifiers && item.selectedModifiers.length > 0) {
+          line += `\n  🎛️ _Opciones: ${item.selectedModifiers.map(m => `${m.groupName}: ${m.optionLabel}`).join(', ')}_`;
         }
         if (item.selectedExtras && item.selectedExtras.length > 0) {
           line += `\n  ➕ _Extras: ${item.selectedExtras.map(e => `${e.name} (+Bs. ${e.price})`).join(', ')}_`;
@@ -182,8 +216,8 @@ ${itemsList}
 ─────────────────────────
 💵 *Subtotal:* Bs. ${subsetSubtotal.toLocaleString('es-VE')}${subtotalUsd ? ` ($${subtotalUsd} USD)` : ''}
 🛵 *Costo Envío en Moto:* ${deliveryFee === 0 ? 'Gratis' : `Bs. ${deliveryFee.toLocaleString('es-VE')}`}
-🛡️ *Tarifa de Servicio (5%):* Bs. ${subsetServiceFee.toLocaleString('es-VE')}
-💰 *TOTAL A PAGAR:* Bs. ${subsetTotal.toLocaleString('es-VE')}${grandTotalUsd ? ` ($${grandTotalUsd} USD)` : ''}
+🛡️ *Tarifa de Servicio (${Math.round(serviceFeeRate * 100)}%):* Bs. ${subsetServiceFee.toLocaleString('es-VE')}
+${subsetDiscount > 0 ? `🎟️ *Descuento Cupón (${appliedCoupon?.code}):* -Bs. ${subsetDiscount.toLocaleString('es-VE')}\n` : ''}${effectiveTip > 0 ? `🤝 *Propina Repartidor:* Bs. ${effectiveTip.toLocaleString('es-VE')}\n` : ''}💰 *TOTAL A PAGAR:* Bs. ${subsetTotal.toLocaleString('es-VE')}${grandTotalUsd ? ` ($${grandTotalUsd} USD)` : ''}
 ─────────────────────────
 💳 *Forma de Pago:* ${getPaymentMethodLabel(paymentMethod)}
 ${paymentReference.trim() ? `🔢 *Nro. de Referencia:* ${paymentReference.trim()}\n` : ''}${orderNotes.trim() ? `📝 *Instrucciones Especiales:* ${orderNotes.trim()}\n` : ''}
@@ -219,8 +253,17 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
           (s, i) => s + (i.itemTotalBs ?? i.product.price) * i.quantity,
           0
         );
-        const svc = sub > 0 ? Math.max(10, Math.round(sub * 0.05)) : 0;
-        const tot = sub + deliveryFee + svc;
+        const storeDynDelivery = calculateDynamicDeliveryFee(storeBiz.coordinates, deliveryType);
+        const storeDeliveryFee =
+          deliveryType === 'pickup' || (appliedCoupon?.valid && appliedCoupon.freeDelivery)
+            ? 0
+            : storeDynDelivery.feeBs;
+        const storeDiscount =
+          discountAmount > 0 && cartSubtotal > 0
+            ? Math.round((sub / cartSubtotal) * discountAmount)
+            : 0;
+        const svc = sub > 0 ? Math.max(10, Math.round(sub * serviceFeeRate)) : 0;
+        const tot = Math.max(0, sub - storeDiscount) + storeDeliveryFee + svc + effectiveTip;
 
         const created = createOrder({
           businessId: storeBiz.id,
@@ -228,11 +271,15 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
           businessLogo: storeBiz.logo,
           customerName: customerName.trim() || currentUser.name || 'Cliente ConForce',
           customerPhone: customerPhone.trim() || currentUser.phone || '+58 412 1234567',
+          customerUsername: currentUser.username,
           items: [...storeItems],
           subtotal: sub,
-          deliveryFee,
+          deliveryFee: storeDeliveryFee,
           serviceFee: svc,
-          serviceFeeRate: 0.05,
+          serviceFeeRate,
+          promoCode: appliedCoupon?.valid ? appliedCoupon.code : undefined,
+          discountAmount: storeDiscount > 0 ? storeDiscount : undefined,
+          driverTip: effectiveTip > 0 ? effectiveTip : undefined,
           total: tot,
           deliveryType,
           deliveryAddress: finalDeliveryAddress,
@@ -240,7 +287,7 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
           paymentMethod,
           paymentReference: paymentReference.trim() || undefined,
           orderChannel: channelToUse,
-          status: 'preparing',
+          status: 'pending_confirmation',
           notes: orderNotes
         });
         lastOrderId = created.id;
@@ -499,8 +546,11 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                   <span className="text-base">🛵</span>
                   <span className="text-xs font-bold">Envío a Domicilio</span>
                   <span className="text-[10px] text-[#D4021D] font-bold tabular-nums">
-                    +{formatCurrency(35).formatted}
+                    +{formatCurrency(dynamicDelivery.feeBs).formatted} ({dynamicDelivery.distanceKm} km)
                   </span>
+                  {dynamicDelivery.multiplierLabel && (
+                    <span className="text-[9px] text-amber-700 font-bold">{dynamicDelivery.multiplierLabel}</span>
+                  )}
                 </button>
 
                 <button
@@ -802,6 +852,60 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
               </div>
             </div>
 
+            {/* Propina para el Repartidor (solo delivery) */}
+            {deliveryType === 'delivery' && (
+              <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-800">🤝 Propina para el Repartidor (Opcional)</span>
+                  <span className="font-black text-emerald-700">{formatCurrency(driverTip).formatted}</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[0, 20, 40, 60, 100].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setDriverTip(amt)}
+                      className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                        driverTip === amt
+                          ? 'bg-[#D4021D] text-white border-[#D4021D]'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {amt === 0 ? 'Sin' : `Bs. ${amt}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cupón Promocional */}
+            <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <label className="text-[10px] uppercase font-bold text-slate-600 block">
+                🎟️ Código Promocional / Cupón
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  placeholder="Ej: CONFORCE15 o ENVIOGRATIS"
+                  className="flex-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 uppercase focus:outline-none focus:border-[#D4021D]"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Aplicar
+                </button>
+              </div>
+              {appliedCoupon && (
+                <p className={`text-[11px] font-bold ${appliedCoupon.valid ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {appliedCoupon.message}
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="text-slate-600 text-[10px] uppercase font-bold">Instrucciones o Notas</label>
               <input
@@ -847,11 +951,23 @@ _Enviado directamente desde ConForce Marketplace Venezuela_`;
                 <span className="flex items-center gap-1 text-slate-600">
                   <span>Tarifa de servicio:</span>
                   <span className="text-[9px] bg-red-50 text-[#D4021D] font-black px-1.5 py-0.5 rounded border border-red-200">
-                    5% Soporte & Garantía
+                    {Math.round(serviceFeeRate * 100)}% Soporte & Garantía
                   </span>
                 </span>
                 <span className="font-semibold text-slate-900 tabular-nums">{formatCurrency(serviceFee).formatted}</span>
               </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-700 font-bold">
+                  <span>Descuento ({appliedCoupon?.code}):</span>
+                  <span className="tabular-nums">-{formatCurrency(discountAmount).formatted}</span>
+                </div>
+              )}
+              {effectiveTip > 0 && (
+                <div className="flex justify-between text-slate-700 font-semibold">
+                  <span>Propina repartidor:</span>
+                  <span className="tabular-nums">+{formatCurrency(effectiveTip).formatted}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-200">
                 <span>Total a Pagar:</span>
                 <span className="text-[#D4021D] tabular-nums">{formatCurrency(grandTotal).formatted}</span>

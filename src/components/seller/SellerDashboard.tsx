@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Business, Product, Order, OrderStatus, ProductVariantOption, ProductVariant, ProductExtra } from '../../types';
+import { Business, BusinessOperationalStatus, DailySchedule, Product, ProductExtra, Order, OrderStatus, ProductVariantOption, ProductVariant, ProductModifierGroup } from '../../types';
 import {
   Store,
   MapPin,
@@ -72,6 +72,8 @@ export const SellerDashboard: React.FC = () => {
     orders,
     drivers,
     updateOrderStatus,
+    acceptOrderWithPrepTime,
+    autoAssignNearestDriver,
     assignOrderDriver,
     cancelOrderWithReason,
     isSoundAlertEnabled,
@@ -134,7 +136,7 @@ export const SellerDashboard: React.FC = () => {
   const [newOptionLabel, setNewOptionLabel] = useState('');
   const [newOptionPriceDelta, setNewOptionPriceDelta] = useState<number>(0);
 
-  // Restaurant / Food specific state
+  // Restaurant / Food specific & Modifier Groups state
   const [isFoodProduct, setIsFoodProduct] = useState(false);
   const [prodIngredients, setProdIngredients] = useState<string[]>([]);
   const [newIngredientInput, setNewIngredientInput] = useState('');
@@ -143,6 +145,10 @@ export const SellerDashboard: React.FC = () => {
   const [newExtraPrice, setNewExtraPrice] = useState<number>(0);
   const [prodPrepTime, setProdPrepTime] = useState('15-20 min');
   const [prodFoodTags, setProdFoodTags] = useState<string[]>([]);
+  const [prodModifierGroups, setProdModifierGroups] = useState<ProductModifierGroup[]>([]);
+  const [newModGrpName, setNewModGrpName] = useState('');
+  const [newModGrpRequired, setNewModGrpRequired] = useState(true);
+  const [newModOptInputs, setNewModOptInputs] = useState<Record<string, { label: string; price: number }>>({});
 
   // States for Boost Ads Modal
   const [selectedProductForBoost, setSelectedProductForBoost] = useState<Product | null>(null);
@@ -174,6 +180,24 @@ export const SellerDashboard: React.FC = () => {
   const [sellerGpsStatus, setSellerGpsStatus] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
   const [isDetectingSellerGps, setIsDetectingSellerGps] = useState(false);
 
+  // Weekly schedules & Holidays & Custom Categories
+  const DEFAULT_WEEK_SCHEDULE: Record<string, DailySchedule> = {
+    Lunes: { open: '08:00', close: '21:00', closed: false },
+    Martes: { open: '08:00', close: '21:00', closed: false },
+    Miércoles: { open: '08:00', close: '21:00', closed: false },
+    Jueves: { open: '08:00', close: '21:00', closed: false },
+    Viernes: { open: '08:00', close: '22:00', closed: false },
+    Sábado: { open: '09:00', close: '22:00', closed: false },
+    Domingo: { open: '09:00', close: '20:00', closed: false }
+  };
+  const [weeklySchedule, setWeeklySchedule] = useState<Record<string, DailySchedule>>(
+    biz?.weeklySchedule || DEFAULT_WEEK_SCHEDULE
+  );
+  const [holidayClosures, setHolidayClosures] = useState<string[]>(biz?.holidayClosures || []);
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newCustomCatInput, setNewCustomCatInput] = useState('');
+  const [orderDispatchFeedback, setOrderDispatchFeedback] = useState<string | null>(null);
+
   // Filters for Orders & Catalog
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'on_the_way' | 'completed'>('all');
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
@@ -198,7 +222,20 @@ export const SellerDashboard: React.FC = () => {
     setPayDocId(biz.paymentInfo?.documentId || biz.rif || '');
     setPayHolder(biz.paymentInfo?.accountHolder || biz.name || '');
     setPayZelle(biz.paymentInfo?.zelleEmail || '');
+    setWeeklySchedule(biz.weeklySchedule || DEFAULT_WEEK_SCHEDULE);
+    setHolidayClosures(biz.holidayClosures || []);
   }, [biz?.id, biz?.coordinates?.lat, biz?.coordinates?.lng]);
+
+  // Persistent audio alert for pending_confirmation orders
+  const pendingConfirmCount = sellerOrders.filter((o) => o.status === 'pending_confirmation').length;
+  useEffect(() => {
+    if (!isSoundAlertEnabled || pendingConfirmCount === 0) return;
+    playOrderChime();
+    const timer = window.setInterval(() => {
+      playOrderChime();
+    }, 12000);
+    return () => window.clearInterval(timer);
+  }, [isSoundAlertEnabled, pendingConfirmCount]);
 
   // States for Driver Dispatch Modal
   const [dispatchOrder, setDispatchOrder] = useState<Order | null>(null);
@@ -250,6 +287,8 @@ export const SellerDashboard: React.FC = () => {
       logo: bizLogo,
       bannerImage: bizBanner || biz.bannerImage,
       customPinColor: bizPinColor,
+      weeklySchedule,
+      holidayClosures,
       paymentInfo: {
         bankName: payBankName,
         phone: payPhone,
@@ -374,6 +413,8 @@ export const SellerDashboard: React.FC = () => {
     setNewExtraPrice(0);
     setProdPrepTime('15-20 min');
     setProdFoodTags([]);
+    setProdModifierGroups([]);
+    setNewModGrpName('');
     setShowProductModal(true);
   };
 
@@ -402,6 +443,8 @@ export const SellerDashboard: React.FC = () => {
     setNewExtraPrice(0);
     setProdPrepTime(prod.preparationTime || '15-20 min');
     setProdFoodTags(prod.foodTags || []);
+    setProdModifierGroups(prod.modifierGroups || []);
+    setNewModGrpName('');
     setShowProductModal(true);
   };
 
@@ -445,6 +488,7 @@ export const SellerDashboard: React.FC = () => {
       isOfferOfTheDay: prodIsOffer,
       hasVariants: prodHasVariants && prodVariantOptions.length > 0,
       variants: variantsData,
+      modifierGroups: prodModifierGroups.length > 0 ? prodModifierGroups : undefined,
       ingredients: isFoodProduct && prodIngredients.length > 0 ? prodIngredients : undefined,
       extras: isFoodProduct && prodExtras.length > 0 ? prodExtras : undefined,
       preparationTime: isFoodProduct ? prodPrepTime : undefined,
@@ -526,7 +570,8 @@ export const SellerDashboard: React.FC = () => {
   };
 
   const filteredSellerOrders = sellerOrders.filter((o) => {
-    if (orderStatusFilter === 'active') return o.status === 'preparing' || o.status === 'ready';
+    if (orderStatusFilter === 'active')
+      return o.status === 'pending_confirmation' || o.status === 'preparing' || o.status === 'ready';
     if (orderStatusFilter === 'on_the_way') return o.status === 'on_the_way';
     if (orderStatusFilter === 'completed') return o.status === 'delivered' || o.status === 'cancelled';
     return true;
@@ -577,9 +622,32 @@ export const SellerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Store Dropdown selector & Quick Create */}
+        {/* Store Operational Switch + Store Dropdown selector */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-600 font-medium">Mi Negocio:</span>
+          <div className="inline-flex bg-white p-1 rounded-xl border border-slate-200 shadow-xs text-[11px] font-bold">
+            {(
+              [
+                { id: 'open', label: '🟢 Abierto', activeCls: 'bg-emerald-600 text-white' },
+                { id: 'paused', label: '⏸️ Pausado', activeCls: 'bg-amber-500 text-slate-950' },
+                { id: 'closed', label: '🔴 Cerrado', activeCls: 'bg-red-600 text-white' }
+              ] as { id: BusinessOperationalStatus; label: string; activeCls: string }[]
+            ).map((st) => {
+              const currentOp = biz.operationalStatus || 'open';
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => updateBusiness(biz.id, { operationalStatus: st.id })}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    currentOp === st.id ? st.activeCls : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {st.label}
+                </button>
+              );
+            })}
+          </div>
+
           <select
             value={biz.id}
             onChange={(e) => handleSelectBusiness(e.target.value)}
@@ -708,7 +776,10 @@ export const SellerDashboard: React.FC = () => {
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
             {[
               { id: 'all', label: `Todos (${sellerOrders.length})` },
-              { id: 'active', label: `Por Atender (${sellerOrders.filter((o) => o.status === 'preparing' || o.status === 'ready').length})` },
+              {
+                id: 'active',
+                label: `Por Atender (${sellerOrders.filter((o) => o.status === 'pending_confirmation' || o.status === 'preparing' || o.status === 'ready').length})`
+              },
               { id: 'on_the_way', label: `En Ruta (${sellerOrders.filter((o) => o.status === 'on_the_way').length})` },
               { id: 'completed', label: `Historial (${sellerOrders.filter((o) => o.status === 'delivered' || o.status === 'cancelled').length})` }
             ].map((f) => (
@@ -894,22 +965,73 @@ export const SellerDashboard: React.FC = () => {
                   </div>
 
                   {/* Status Switcher Buttons */}
-                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                    <div className="flex items-center justify-between">
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    {order.status === 'pending_confirmation' && (
+                      <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-2xl space-y-2">
+                        <div className="flex items-center justify-between text-xs font-black text-amber-950">
+                          <span className="animate-pulse">⏳ Pedido Nuevo · Selecciona Tiempo de Prep:</span>
+                          <button
+                            type="button"
+                            onClick={() => setCancelOrderTarget(order)}
+                            className="text-[10px] text-red-700 hover:underline font-bold cursor-pointer"
+                          >
+                            Rechazar
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[15, 25, 35, 45].map((mins) => (
+                            <button
+                              key={mins}
+                              type="button"
+                              onClick={() => acceptOrderWithPrepTime(order.id, mins)}
+                              className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold cursor-pointer shadow-2xs"
+                            >
+                              ✓ {mins} min
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <label className="text-[10px] uppercase font-bold text-slate-500">
                         Estatus del Pedido:
                       </label>
-                      {order.status !== 'cancelled' && order.status !== 'delivered' && (
-                        <button
-                          type="button"
-                          onClick={() => setCancelOrderTarget(order)}
-                          className="text-[10px] text-red-600 hover:text-red-800 font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Ban className="w-3 h-3" />
-                          <span>Rechazar / Cancelar</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {order.deliveryType === 'delivery' &&
+                          !order.driverId &&
+                          order.status !== 'cancelled' &&
+                          order.status !== 'delivered' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const res = autoAssignNearestDriver(order.id);
+                                setOrderDispatchFeedback(res.message);
+                                setTimeout(() => setOrderDispatchFeedback(null), 4000);
+                              }}
+                              className="text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-lg font-bold cursor-pointer"
+                            >
+                              ⚡ Auto-Asignar Moto
+                            </button>
+                          )}
+                        {order.status !== 'cancelled' && order.status !== 'delivered' && (
+                          <button
+                            type="button"
+                            onClick={() => setCancelOrderTarget(order)}
+                            className="text-[10px] text-red-600 hover:text-red-800 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Ban className="w-3 h-3" />
+                            <span>Rechazar / Cancelar</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {orderDispatchFeedback && (
+                      <p className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                        {orderDispatchFeedback}
+                      </p>
+                    )}
 
                     <div className="grid grid-cols-4 gap-1">
                       {[
@@ -1018,6 +1140,62 @@ export const SellerDashboard: React.FC = () => {
               {productSyncFeedback.text}
             </div>
           )}
+
+          {/* Custom Categories Manager Bar */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-black uppercase text-slate-700">
+                Categorías del Menú / Catálogo
+              </span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newCustomCatInput}
+                  onChange={(e) => setNewCustomCatInput(e.target.value)}
+                  placeholder="Nueva categoría (Ej. Combos)"
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:border-[#D4021D]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const clean = newCustomCatInput.trim();
+                    if (!clean) return;
+                    const existing = biz.customCategories || [];
+                    if (!existing.includes(clean)) {
+                      updateBusiness(biz.id, { customCategories: [...existing, clean] });
+                    }
+                    setNewCustomCatInput('');
+                  }}
+                  className="px-2.5 py-1 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  + Crear
+                </button>
+              </div>
+            </div>
+            {(biz.customCategories && biz.customCategories.length > 0) && (
+              <div className="flex flex-wrap gap-1.5">
+                {biz.customCategories.map((cat) => (
+                  <span
+                    key={cat}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700"
+                  >
+                    {cat}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateBusiness(biz.id, {
+                          customCategories: (biz.customCategories || []).filter((c) => c !== cat)
+                        })
+                      }
+                      className="text-red-500 hover:text-red-700 cursor-pointer ml-0.5"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Search & Filter Toolbar for Catalog */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -1576,6 +1754,109 @@ export const SellerDashboard: React.FC = () => {
                     className="w-full mt-0.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Horarios Habituales por Día y Días Festivos */}
+            <div className="md:col-span-2 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                  <Clock className="w-4 h-4 text-[#D4021D]" />
+                  <span>Horarios Semanales y Días Festivos Cerrados</span>
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                {Object.entries(weeklySchedule).map(([day, sch]) => (
+                  <div key={day} className="grid grid-cols-12 items-center gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs">
+                    <span className="col-span-3 font-bold text-slate-800">{day}</span>
+                    <label className="col-span-3 flex items-center gap-1 text-[11px] text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!sch.closed}
+                        onChange={(e) =>
+                          setWeeklySchedule((prev) => ({
+                            ...prev,
+                            [day]: { ...sch, closed: !e.target.checked }
+                          }))
+                        }
+                        className="accent-[#D4021D]"
+                      />
+                      <span>{sch.closed ? 'Cerrado' : 'Abierto'}</span>
+                    </label>
+                    {!sch.closed && (
+                      <div className="col-span-6 flex items-center gap-1">
+                        <input
+                          type="time"
+                          value={sch.open}
+                          onChange={(e) =>
+                            setWeeklySchedule((prev) => ({
+                              ...prev,
+                              [day]: { ...sch, open: e.target.value }
+                            }))
+                          }
+                          className="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[11px] w-full"
+                        />
+                        <span>-</span>
+                        <input
+                          type="time"
+                          value={sch.close}
+                          onChange={(e) =>
+                            setWeeklySchedule((prev) => ({
+                              ...prev,
+                              [day]: { ...sch, close: e.target.value }
+                            }))
+                          }
+                          className="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[11px] w-full"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 space-y-2">
+                <label className="text-[10px] font-bold uppercase text-slate-600 block">
+                  Días Festivos / Cierres Especiales:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={newHolidayDate}
+                    onChange={(e) => setNewHolidayDate(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-xl px-2.5 py-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newHolidayDate || holidayClosures.includes(newHolidayDate)) return;
+                      setHolidayClosures((prev) => [...prev, newHolidayDate]);
+                      setNewHolidayDate('');
+                    }}
+                    className="px-3 py-1 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    + Agregar Fecha
+                  </button>
+                </div>
+                {holidayClosures.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {holidayClosures.map((d) => (
+                      <span
+                        key={d}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-[11px] font-bold"
+                      >
+                        {d}
+                        <button
+                          type="button"
+                          onClick={() => setHolidayClosures((prev) => prev.filter((x) => x !== d))}
+                          className="cursor-pointer ml-1"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2142,6 +2423,164 @@ export const SellerDashboard: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* 5B. MODIFICADORES OBLIGATORIOS Y OPCIONALES (Ej. Término carne, Salsas, Guarniciones) */}
+              <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-3">
+                <span className="text-purple-950 text-xs font-black flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  <span>Grupos de Modificadores (Obligatorios u Opcionales)</span>
+                </span>
+
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <input
+                    type="text"
+                    value={newModGrpName}
+                    onChange={(e) => setNewModGrpName(e.target.value)}
+                    placeholder="Ej: Término de la carne / Contorno"
+                    className="flex-1 min-w-[160px] bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs"
+                  />
+                  <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newModGrpRequired}
+                      onChange={(e) => setNewModGrpRequired(e.target.checked)}
+                      className="accent-purple-600"
+                    />
+                    <span>Obligatorio</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newModGrpName.trim()) return;
+                      setProdModifierGroups((prev) => [
+                        ...prev,
+                        {
+                          id: `mgrp-${Date.now()}`,
+                          name: newModGrpName.trim(),
+                          required: newModGrpRequired,
+                          minSelect: newModGrpRequired ? 1 : 0,
+                          maxSelect: 3,
+                          options: []
+                        }
+                      ]);
+                      setNewModGrpName('');
+                    }}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    + Grupo
+                  </button>
+                </div>
+
+                {prodModifierGroups.map((grp) => {
+                  const optDraft = newModOptInputs[grp.id] || { label: '', price: 0 };
+                  return (
+                    <div key={grp.id} className="p-2.5 bg-white border border-purple-200 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-black text-slate-900">
+                          {grp.name}{' '}
+                          <span className="text-[10px] font-bold text-purple-700">
+                            ({grp.required ? 'Obligatorio' : 'Opcional'})
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProdModifierGroups((prev) => prev.filter((g) => g.id !== grp.id))
+                          }
+                          className="text-red-500 font-bold text-xs cursor-pointer"
+                        >
+                          Eliminar grupo
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-12 gap-1.5">
+                        <input
+                          type="text"
+                          value={optDraft.label}
+                          onChange={(e) =>
+                            setNewModOptInputs((prev) => ({
+                              ...prev,
+                              [grp.id]: { ...optDraft, label: e.target.value }
+                            }))
+                          }
+                          placeholder="Opción (Ej. Término 3/4)"
+                          className="col-span-7 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                        />
+                        <input
+                          type="number"
+                          value={optDraft.price || ''}
+                          onChange={(e) =>
+                            setNewModOptInputs((prev) => ({
+                              ...prev,
+                              [grp.id]: { ...optDraft, price: Number(e.target.value) }
+                            }))
+                          }
+                          placeholder="+Bs."
+                          className="col-span-3 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!optDraft.label.trim()) return;
+                            setProdModifierGroups((prev) =>
+                              prev.map((g) =>
+                                g.id === grp.id
+                                  ? {
+                                      ...g,
+                                      options: [
+                                        ...g.options,
+                                        {
+                                          id: `mopt-${Date.now()}`,
+                                          label: optDraft.label.trim(),
+                                          priceDelta: Number(optDraft.price) || 0
+                                        }
+                                      ]
+                                    }
+                                  : g
+                              )
+                            );
+                            setNewModOptInputs((prev) => ({
+                              ...prev,
+                              [grp.id]: { label: '', price: 0 }
+                            }));
+                          }}
+                          className="col-span-2 bg-purple-600 text-white rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {grp.options.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {grp.options.map((o) => (
+                            <span
+                              key={o.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-[10px] font-bold"
+                            >
+                              {o.label} {o.priceDelta > 0 ? `(+Bs. ${o.priceDelta})` : ''}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setProdModifierGroups((prev) =>
+                                    prev.map((g) =>
+                                      g.id === grp.id
+                                        ? { ...g, options: g.options.filter((x) => x.id !== o.id) }
+                                        : g
+                                    )
+                                  )
+                                }
+                                className="text-red-600 ml-0.5 cursor-pointer"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* 6. CHATBOT IA KEYWORDS */}

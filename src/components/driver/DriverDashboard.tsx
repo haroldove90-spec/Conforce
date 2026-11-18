@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Order, DriverStep } from '../../types';
+import { DriverStep, DriverVehicleType } from '../../types';
 import {
   Bike,
   CheckCircle2,
   Navigation as NavIcon,
   Phone,
-  MessageCircle,
   MapPin,
   Clock,
   DollarSign,
@@ -15,17 +14,17 @@ import {
   User,
   ExternalLink,
   ShieldCheck,
-  ChevronRight,
-  TrendingUp,
   Package,
   Power,
-  RefreshCw,
   Camera,
   Trash2,
   Eye,
   FileCheck2,
   X,
-  Upload
+  Lock,
+  LifeBuoy,
+  Sparkles,
+  Wallet
 } from 'lucide-react';
 import { compressAndEncodeImage } from '../../utils/imageUtils';
 
@@ -34,17 +33,37 @@ export const DriverDashboard: React.FC = () => {
     currentDriverProfile,
     drivers,
     orders,
+    businesses,
+    payoutRequests,
     toggleDriverAvailability,
     acceptOrderAsDriver,
     advanceDriverDeliveryStep,
-    openExternalNavigation,
-    currentUser,
+    requestDriverPayout,
+    createSupportTicket,
+    calculateDistance,
+    formatCurrency,
     openDriverRegistration,
     updateDriverProfile
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'deliveries' | 'history' | 'wallet' | 'profile'>('deliveries');
-  const [payoutRequested, setPayoutRequested] = useState(false);
+  const [slideProgress, setSlideProgress] = useState(0);
+  const [stepToast, setStepToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Delivery Verification Modal (PIN or Contactless Photo)
+  const [deliveryModalOrderId, setDeliveryModalOrderId] = useState<string | null>(null);
+  const [deliveryPinInput, setDeliveryPinInput] = useState('');
+  const [deliveryProofPhoto, setDeliveryProofPhoto] = useState<string | undefined>(undefined);
+  const [deliveryValidationError, setDeliveryValidationError] = useState<string | null>(null);
+
+  // Wallet Payout state
+  const [withdrawAmountInput, setWithdrawAmountInput] = useState('');
+  const [payoutFeedback, setPayoutFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Support ticket quick modal
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
+
   const [previewPhoto, setPreviewPhoto] = useState<{ title: string; url: string } | null>(null);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
 
@@ -52,42 +71,90 @@ export const DriverDashboard: React.FC = () => {
 
   // Active delivery assigned to this driver
   const activeOrder = orders.find(
-    o => o.driverId === driver?.id && o.status === 'on_the_way'
+    (o) => o.driverId === driver?.id && (o.status === 'on_the_way' || o.status === 'ready' || o.status === 'preparing')
   );
 
-  // Available orders pool looking for courier (deliveryType === 'delivery', status is ready or preparing, not yet assigned to another driver)
+  // Available orders pool looking for courier
   const availableOrders = orders.filter(
-    o => o.deliveryType === 'delivery' && (o.status === 'ready' || o.status === 'preparing') && !o.driverId
+    (o) =>
+      o.deliveryType === 'delivery' &&
+      (o.status === 'ready' || o.status === 'preparing') &&
+      !o.driverId
   );
 
   // Completed orders delivered by this driver
   const completedOrders = orders.filter(
-    o => o.driverId === driver?.id && o.status === 'delivered'
+    (o) => o.driverId === driver?.id && o.status === 'delivered'
   );
+
+  const driverPayoutHistory = payoutRequests.filter((p) => p.driverId === driver?.id);
+
+  const tipsTotal = driver?.tipsBalance || 0;
+  const bonusTotal = driver?.bonusBalance || 0;
+  const codDebt = driver?.cashCollectedDebt || 0;
+  const netWithdrawableBs = Math.max(0, (driver?.earningsBalance || 0) + tipsTotal + bonusTotal - codDebt);
 
   const getStepProgress = (step?: DriverStep) => {
     switch (step) {
       case 'heading_to_store':
-        return { percent: 25, label: 'En camino a la tienda', stepNum: 1 };
+      case 'assigned':
+        return { percent: 25, label: '1. En camino al restaurante / comercio', stepNum: 1, nextLabel: 'Desliza al llegar y recoger el pedido' };
       case 'picked_up':
-        return { percent: 50, label: 'Pedido retirado y en maleta', stepNum: 2 };
+        return { percent: 50, label: '2. Pedido recogido en maleta', stepNum: 2, nextLabel: 'Desliza para iniciar ruta al cliente' };
       case 'heading_to_client':
-        return { percent: 75, label: 'En ruta al domicilio del cliente', stepNum: 3 };
+        return { percent: 75, label: '3. En ruta al domicilio del cliente', stepNum: 3, nextLabel: 'Desliza al llegar al punto de entrega' };
+      case 'arrived_at_client':
+        return { percent: 90, label: '4. En la puerta del domicilio', stepNum: 4, nextLabel: 'Desliza para validar PIN / Foto y Entregar' };
       case 'delivered':
-        return { percent: 100, label: 'Entregado con éxito', stepNum: 4 };
+        return { percent: 100, label: '5. Entregado con éxito', stepNum: 5, nextLabel: 'Completado' };
       default:
-        return { percent: 15, label: 'Carrera asignada', stepNum: 1 };
+        return { percent: 20, label: '1. Carrera asignada', stepNum: 1, nextLabel: 'Desliza al recoger el pedido' };
     }
   };
 
-  const handleAdvanceStep = (orderId: string, currentStep?: DriverStep) => {
+  const triggerStepProgression = (orderId: string, currentStep?: DriverStep) => {
+    setSlideProgress(0);
     if (!currentStep || currentStep === 'assigned' || currentStep === 'heading_to_store') {
-      advanceDriverDeliveryStep(orderId, 'picked_up');
+      const res = advanceDriverDeliveryStep(orderId, 'picked_up');
+      if (res.message) setStepToast({ ok: res.success, msg: res.message });
     } else if (currentStep === 'picked_up') {
-      advanceDriverDeliveryStep(orderId, 'heading_to_client');
+      const res = advanceDriverDeliveryStep(orderId, 'heading_to_client');
+      if (res.message) setStepToast({ ok: res.success, msg: res.message });
     } else if (currentStep === 'heading_to_client') {
-      advanceDriverDeliveryStep(orderId, 'delivered');
+      const res = advanceDriverDeliveryStep(orderId, 'arrived_at_client');
+      if (res.message) setStepToast({ ok: res.success, msg: res.message });
+    } else if (currentStep === 'arrived_at_client') {
+      setDeliveryPinInput('');
+      setDeliveryProofPhoto(undefined);
+      setDeliveryValidationError(null);
+      setDeliveryModalOrderId(orderId);
     }
+    setTimeout(() => setStepToast(null), 4000);
+  };
+
+  const handleConfirmDeliveryWithValidation = () => {
+    if (!deliveryModalOrderId) return;
+    if (!deliveryPinInput.trim() && !deliveryProofPhoto) {
+      setDeliveryValidationError('Ingresa el PIN de 4 dígitos del cliente o adjunta una foto de entrega.');
+      return;
+    }
+    const res = advanceDriverDeliveryStep(deliveryModalOrderId, 'delivered', {
+      pin: deliveryPinInput.trim() || undefined,
+      proofPhoto: deliveryProofPhoto
+    });
+    if (!res.success) {
+      setDeliveryValidationError(res.message || 'PIN de seguridad incorrecto.');
+      return;
+    }
+    setDeliveryModalOrderId(null);
+    setStepToast({ ok: true, msg: res.message || '¡Entrega validada y liquidada en tu billetera!' });
+    setTimeout(() => setStepToast(null), 5000);
+  };
+
+  const vehicleBadgeLabel = (v?: DriverVehicleType) => {
+    if (v === 'bicicleta') return '🚲 Bicicleta';
+    if (v === 'auto') return '🚗 Auto';
+    return '🛵 Moto';
   };
 
   if (!driver) {
@@ -119,12 +186,15 @@ export const DriverDashboard: React.FC = () => {
               <Bike className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-extrabold text-base sm:text-lg text-white">
                   {driver.fullName}
                 </h1>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold">
                   ⭐ {driver.rating.toFixed(1)}
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold">
+                  {vehicleBadgeLabel(driver.vehicleType)}
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-medium">
@@ -244,10 +314,23 @@ export const DriverDashboard: React.FC = () => {
                 </span>
               </div>
 
+              {stepToast && (
+                <div
+                  className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
+                    stepToast.ok
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{stepToast.msg}</span>
+                </div>
+              )}
+
               {/* Progress bar */}
               <div>
                 <div className="flex items-center justify-between text-xs font-bold mb-1.5 text-slate-800">
-                  <span>Paso {getStepProgress(activeOrder.driverStep).stepNum} de 4:</span>
+                  <span>Paso {getStepProgress(activeOrder.driverStep).stepNum} de 5:</span>
                   <span className="text-emerald-700">{getStepProgress(activeOrder.driverStep).label}</span>
                 </div>
                 <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
@@ -257,6 +340,18 @@ export const DriverDashboard: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {activeOrder.paymentMethod === 'cash_on_delivery' && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl flex items-center justify-between text-xs text-amber-900">
+                  <span className="font-bold flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    Cobro Contra Entrega (Efectivo):
+                  </span>
+                  <span className="font-black text-sm">
+                    {formatCurrency(activeOrder.total).formatted}
+                  </span>
+                </div>
+              )}
 
               {/* Origin and Destination Card */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -292,68 +387,86 @@ export const DriverDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Contact & Navigation Actions */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <button
-                  onClick={() => {
-                    const addressQuery = encodeURIComponent(activeOrder.deliveryAddress || activeOrder.businessName);
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${addressQuery}`, '_blank');
-                  }}
-                  className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
+              {/* Contact & Navigation Actions (Anchor links without window.open) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activeOrder.deliveryAddress || activeOrder.businessName)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors"
                 >
                   <NavIcon className="w-4 h-4 text-emerald-400" />
                   <span>Google Maps</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const addressQuery = encodeURIComponent(activeOrder.deliveryAddress || activeOrder.businessName);
-                    window.open(`https://waze.com/ul?q=${addressQuery}`, '_blank');
-                  }}
-                  className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                </a>
+                <a
+                  href={`https://waze.com/ul?q=${encodeURIComponent(activeOrder.deliveryAddress || activeOrder.businessName)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors"
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span>Waze</span>
-                </button>
+                </a>
                 <a
                   href={`tel:${activeOrder.customerPhone}`}
-                  className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs transition-colors"
+                  className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs transition-colors"
                 >
                   <Phone className="w-4 h-4" />
-                  <span>Llamar Cliente</span>
+                  <span>Llamar (Puente)</span>
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setSupportModalOpen(true)}
+                  className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  <LifeBuoy className="w-4 h-4" />
+                  <span>Soporte</span>
+                </button>
               </div>
 
-              {/* Big tactile step progression button */}
-              <div className="pt-2">
-                {(!activeOrder.driverStep || activeOrder.driverStep === 'assigned' || activeOrder.driverStep === 'heading_to_store') && (
-                  <button
-                    onClick={() => handleAdvanceStep(activeOrder.id, activeOrder.driverStep)}
-                    className="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold text-base transition-all shadow-lg shadow-emerald-950/30 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Store className="w-5 h-5" />
-                    <span>1. ¡Llegué a la Tienda a Retirar el Pedido!</span>
-                  </button>
-                )}
-
-                {activeOrder.driverStep === 'picked_up' && (
-                  <button
-                    onClick={() => handleAdvanceStep(activeOrder.id, activeOrder.driverStep)}
-                    className="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white font-extrabold text-base transition-all shadow-lg shadow-indigo-950/30 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Package className="w-5 h-5" />
-                    <span>2. ¡Pedido en Maleta, Voy en Ruta al Cliente!</span>
-                  </button>
-                )}
-
-                {activeOrder.driverStep === 'heading_to_client' && (
-                  <button
-                    onClick={() => handleAdvanceStep(activeOrder.id, activeOrder.driverStep)}
-                    className="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold text-base transition-all shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer animate-pulse"
-                  >
-                    <CheckCircle2 className="w-6 h-6" />
-                    <span>3. ¡Pedido Entregado con Éxito al Cliente!</span>
-                  </button>
-                )}
+              {/* Interactive Slide-to-Confirm Step Control */}
+              <div className="pt-2 space-y-2.5">
+                <div className="p-3 bg-emerald-950 text-white rounded-2xl border border-emerald-700/60 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-emerald-300 uppercase text-[10px] tracking-wider">
+                      Control Deslizante de Entrega
+                    </span>
+                    <span>{slideProgress}%</span>
+                  </div>
+                  <p className="text-xs font-bold text-white">
+                    👉 {getStepProgress(activeOrder.driverStep).nextLabel}
+                  </p>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={slideProgress}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setSlideProgress(val);
+                      if (val >= 90) {
+                        triggerStepProgression(activeOrder.id, activeOrder.driverStep);
+                      }
+                    }}
+                    onMouseUp={() => {
+                      if (slideProgress < 90) setSlideProgress(0);
+                    }}
+                    onTouchEnd={() => {
+                      if (slideProgress < 90) setSlideProgress(0);
+                    }}
+                    className="w-full accent-emerald-400 h-3 bg-emerald-900 rounded-lg cursor-grab active:cursor-grabbing"
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-emerald-300/80">
+                    <span>Desliza a la derecha para confirmar →</span>
+                    <button
+                      type="button"
+                      onClick={() => triggerStepProgression(activeOrder.id, activeOrder.driverStep)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer"
+                    >
+                      Confirmar Paso
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -383,49 +496,65 @@ export const DriverDashboard: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {availableOrders.map((ord) => (
-                  <div
-                    key={ord.id}
-                    className="p-4 bg-white border border-slate-200 hover:border-emerald-500 rounded-2xl shadow-xs space-y-3 transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
-                          #{ord.id}
-                        </span>
-                        <h3 className="font-bold text-sm text-slate-900 mt-1">
-                          {ord.businessName}
-                        </h3>
-                        <p className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-[#D4021D] shrink-0" />
-                          <span className="truncate">{ord.deliveryAddress}</span>
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="block font-extrabold text-sm text-emerald-600">
-                          + Bs. {ord.deliveryFee || 45}
-                        </span>
-                        <span className="text-[10px] text-slate-400">Tarifa Mensajero</span>
-                      </div>
-                    </div>
-
-                    <div className="p-2 bg-slate-50 rounded-xl text-xs text-slate-600 flex items-center justify-between">
-                      <span>{ord.items.length} productos ({ord.customerName})</span>
-                      <span className="font-semibold text-slate-800">
-                        Total Pedido: Bs. {ord.total.toLocaleString('es-VE')}
-                      </span>
-                    </div>
-
-                    <button
-                      onClick={() => acceptOrderAsDriver(ord.id, driver.id)}
-                      disabled={Boolean(activeOrder)}
-                      className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                {availableOrders.map((ord) => {
+                  const biz = businesses.find((b) => b.id === ord.businessId);
+                  const distKm = biz?.coordinates ? calculateDistance(biz.coordinates) : 1.8;
+                  const estimatedEarn = (ord.deliveryFee || 45) + (ord.driverTip || 0);
+                  return (
+                    <div
+                      key={ord.id}
+                      className="p-4 bg-white border border-slate-200 hover:border-emerald-500 rounded-2xl shadow-xs space-y-3 transition-all"
                     >
-                      <Bike className="w-4 h-4" />
-                      <span>{activeOrder ? 'Ya tienes una carrera en curso' : 'Aceptar Carrera y Despachar'}</span>
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
+                              #{ord.id}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 text-[10px] font-bold">
+                              📍 {distKm.toFixed(1)} km
+                            </span>
+                            {(ord.driverTip || 0) > 0 && (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                🎁 Propina +{formatCurrency(ord.driverTip || 0).formatted}
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-bold text-sm text-slate-900 mt-1">
+                            {ord.businessName}
+                          </h3>
+                          <p className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
+                            <MapPin className="w-3 h-3 text-[#D4021D] shrink-0" />
+                            <span className="truncate">{ord.deliveryAddress}</span>
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="block font-extrabold text-sm text-emerald-600">
+                            + {formatCurrency(estimatedEarn).formatted}
+                          </span>
+                          <span className="text-[10px] text-slate-400">Ganancia Est.</span>
+                        </div>
+                      </div>
+
+                      <div className="p-2 bg-slate-50 rounded-xl text-xs text-slate-600 flex items-center justify-between">
+                        <span>{ord.items.length} prod. ({ord.customerName})</span>
+                        <span className="font-semibold text-slate-800">
+                          {ord.paymentMethod === 'cash_on_delivery' ? '💵 Efectivo:' : 'Total:'}{' '}
+                          {formatCurrency(ord.total).formatted}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => acceptOrderAsDriver(ord.id, driver.id)}
+                        disabled={Boolean(activeOrder)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Bike className="w-4 h-4" />
+                        <span>{activeOrder ? 'Ya tienes una carrera en curso' : 'Aceptar Solicitud y Despachar'}</span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -468,17 +597,40 @@ export const DriverDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: BILLETERA & PAGO MÓVIL */}
+      {/* TAB 3: BILLETERA, PROPINAS, EFECTIVO COD & RETIROS */}
       {activeTab === 'wallet' && (
         <div className="bg-white border border-slate-200 rounded-3xl p-5 space-y-5">
-          <div className="p-6 bg-gradient-to-br from-slate-950 to-slate-900 text-white rounded-2xl space-y-2 shadow-md">
-            <span className="text-xs text-slate-400 font-semibold uppercase">Saldo Disponible para Pago Móvil</span>
-            <div className="text-3xl font-extrabold text-emerald-400">
-              Bs. {driver.earningsBalance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+          <div className="p-6 bg-gradient-to-br from-slate-950 to-slate-900 text-white rounded-2xl space-y-4 shadow-md">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="text-xs text-slate-400 font-semibold uppercase">
+                  Saldo Neto Retirable por Pago Móvil
+                </span>
+                <div className="text-3xl font-extrabold text-emerald-400 mt-1">
+                  {formatCurrency(netWithdrawableBs).formatted}
+                </div>
+              </div>
+              <Wallet className="w-7 h-7 text-emerald-400 opacity-80" />
             </div>
-            <p className="text-xs text-slate-400">
-              Acumulado de tarifas por despachos completados exitosamente.
-            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-slate-800 text-xs">
+              <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
+                <span className="block text-[10px] text-slate-400">Por Viajes</span>
+                <span className="font-bold text-white">{formatCurrency(driver.earningsBalance).formatted}</span>
+              </div>
+              <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
+                <span className="block text-[10px] text-slate-400">Propinas 100%</span>
+                <span className="font-bold text-amber-400">+ {formatCurrency(tipsTotal).formatted}</span>
+              </div>
+              <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
+                <span className="block text-[10px] text-slate-400">Bonos por Meta</span>
+                <span className="font-bold text-sky-400">+ {formatCurrency(bonusTotal).formatted}</span>
+              </div>
+              <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
+                <span className="block text-[10px] text-slate-400">Efectivo Cobrado</span>
+                <span className="font-bold text-rose-400">- {formatCurrency(codDebt).formatted}</span>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3 text-xs">
@@ -499,21 +651,74 @@ export const DriverDashboard: React.FC = () => {
             </div>
           </div>
 
-          {payoutRequested ? (
-            <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <span>
-                ¡Solicitud de retiro registrada! Finanzas procesará tu transferencia a través de Pago Móvil en las próximas 2 horas hábiles.
-              </span>
-            </div>
-          ) : (
-            <button
-              onClick={() => setPayoutRequested(true)}
-              disabled={driver.earningsBalance <= 0}
-              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm transition-colors cursor-pointer shadow-md"
+          {payoutFeedback && (
+            <div
+              className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
+                payoutFeedback.ok
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border border-rose-200 text-rose-800'
+              }`}
             >
-              Solicitar Pago Móvil de Mis Ganancias (Bs. {driver.earningsBalance.toLocaleString('es-VE')})
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{payoutFeedback.msg}</span>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="number"
+              min={1}
+              max={netWithdrawableBs}
+              placeholder={`Monto en Bs. (máx. ${Math.round(netWithdrawableBs)})`}
+              value={withdrawAmountInput}
+              onChange={(e) => setWithdrawAmountInput(e.target.value)}
+              className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const amount = Number(withdrawAmountInput) || netWithdrawableBs;
+                const res = requestDriverPayout(driver.id, amount);
+                setPayoutFeedback({ ok: res.success, msg: res.message });
+                if (res.success) setWithdrawAmountInput('');
+              }}
+              disabled={netWithdrawableBs <= 0}
+              className="py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm transition-colors cursor-pointer shadow-md"
+            >
+              Solicitar Retiro Pago Móvil
             </button>
+          </div>
+
+          {driverPayoutHistory.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <h4 className="font-bold text-slate-800 text-xs uppercase">Historial de Retiros</h4>
+              <div className="space-y-1.5">
+                {driverPayoutHistory.map((pr) => (
+                  <div
+                    key={pr.id}
+                    className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <span className="font-bold text-slate-900">{formatCurrency(pr.amountBs).formatted}</span>
+                      <span className="block text-[10px] text-slate-500">
+                        {pr.bankName} · {new Date(pr.requestedAt).toLocaleDateString('es-VE')}
+                      </span>
+                    </div>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        pr.status === 'paid'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : pr.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {pr.status === 'paid' ? 'Pagado ✓' : pr.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -584,15 +789,31 @@ export const DriverDashboard: React.FC = () => {
 
           {/* Vehículo y Datos Operativos */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-              <span className="block text-[10px] text-slate-400 uppercase font-bold">Vehículo</span>
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+              <span className="block text-[10px] text-slate-400 uppercase font-bold">Vehículo & Modalidad</span>
               <p className="font-extrabold text-slate-900 text-sm">{driver.motorcycleBrandModel}</p>
               <p className="text-slate-600">Placa: <strong>{driver.plateNumber}</strong></p>
+              <div className="flex gap-1 pt-1">
+                {(['moto', 'bicicleta', 'auto'] as DriverVehicleType[]).map((vt) => (
+                  <button
+                    key={vt}
+                    type="button"
+                    onClick={() => updateDriverProfile(driver.id, { vehicleType: vt })}
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold border cursor-pointer transition-all ${
+                      (driver.vehicleType || 'moto') === vt
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {vt === 'moto' ? '🛵 Moto' : vt === 'bicicleta' ? '🚲 Bici' : '🚗 Auto'}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
               <span className="block text-[10px] text-slate-400 uppercase font-bold">Licencia de Conducir</span>
               <p className="font-semibold text-slate-800">{driver.driverLicense || 'En trámite / Verificada'}</p>
-              <p className="text-slate-500 text-[11px]">Válida para moto 150cc+</p>
+              <p className="text-slate-500 text-[11px]">Cálculo de rutas optimizado para {vehicleBadgeLabel(driver.vehicleType)}</p>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
               <span className="block text-[10px] text-slate-400 uppercase font-bold">Pago Móvil Asignado</span>
@@ -739,6 +960,165 @@ export const DriverDashboard: React.FC = () => {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Validación de Entrega (PIN 4 dígitos o Foto de Evidencia) */}
+      {deliveryModalOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 p-5 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-extrabold text-sm text-slate-900">
+                  Validar Entrega al Cliente
+                </h3>
+              </div>
+              <button
+                onClick={() => setDeliveryModalOrderId(null)}
+                className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-slate-600">
+              Solicita al cliente su <strong>PIN de seguridad de 4 dígitos</strong> o toma una{' '}
+              <strong>foto de evidencia</strong> (entrega sin contacto) para finalizar el pedido #{deliveryModalOrderId}.
+            </p>
+
+            <div>
+              <label className="block font-bold text-slate-800 mb-1">
+                Código PIN del Cliente (4 dígitos)
+              </label>
+              <input
+                type="text"
+                maxLength={6}
+                placeholder="Ej. 4829"
+                value={deliveryPinInput}
+                onChange={(e) => {
+                  setDeliveryPinInput(e.target.value);
+                  setDeliveryValidationError(null);
+                }}
+                className="w-full px-4 py-3 text-center text-lg tracking-[0.35em] font-black bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block font-bold text-slate-800">
+                O Foto de Evidencia (Entrega sin contacto)
+              </label>
+              {deliveryProofPhoto ? (
+                <div className="relative h-32 rounded-xl overflow-hidden border border-slate-300">
+                  <img src={deliveryProofPhoto} alt="Evidencia entrega" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryProofPhoto(undefined)}
+                    className="absolute top-2 right-2 p-1.5 bg-rose-600 text-white rounded-lg cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl cursor-pointer text-slate-600 font-bold">
+                  <Camera className="w-4 h-4 text-emerald-600" />
+                  <span>Tomar / Subir Foto de Entrega</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const b64 = await compressAndEncodeImage(file, 1000, 1000, 0.8);
+                      setDeliveryProofPhoto(b64);
+                      setDeliveryValidationError(null);
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {deliveryValidationError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl font-bold">
+                {deliveryValidationError}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeliveryModalOrderId(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeliveryWithValidation}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl cursor-pointer shadow-md"
+              >
+                Confirmar Entrega ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Soporte Operativo del Repartidor */}
+      {supportModalOpen && activeOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 p-5 shadow-2xl space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                <LifeBuoy className="w-4 h-4 text-amber-600" />
+                Reportar Incidencia · Pedido #{activeOrder.id}
+              </h3>
+              <button
+                onClick={() => setSupportModalOpen(false)}
+                className="p-1 rounded-full bg-slate-100 text-slate-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <textarea
+              rows={3}
+              placeholder="Ej. Cliente no responde en puerta, dirección imprecisa o retraso en local..."
+              value={supportMessage}
+              onChange={(e) => setSupportMessage(e.target.value)}
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSupportModalOpen(false)}
+                className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!supportMessage.trim()) return;
+                  createSupportTicket({
+                    orderId: activeOrder.id,
+                    requesterName: driver.fullName,
+                    requesterRole: 'driver',
+                    subject: `Incidencia Repartidor Pedido #${activeOrder.id}`,
+                    message: supportMessage.trim()
+                  });
+                  setSupportMessage('');
+                  setSupportModalOpen(false);
+                  setStepToast({ ok: true, msg: 'Ticket enviado a Superadmin Soporte.' });
+                  setTimeout(() => setStepToast(null), 3500);
+                }}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl cursor-pointer"
+              >
+                Enviar a Soporte
+              </button>
             </div>
           </div>
         </div>

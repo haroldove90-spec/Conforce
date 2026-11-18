@@ -19,7 +19,14 @@ import {
   DriverProfile,
   DriverStatus,
   DriverStep,
-  SelectedExtra
+  DriverVehicleType,
+  SelectedExtra,
+  PromoCoupon,
+  PromoBanner,
+  PlatformTariffConfig,
+  DriverPayoutRequest,
+  SupportTicket,
+  OrderSettlement
 } from '../types';
 import {
   INITIAL_BUSINESSES,
@@ -66,7 +73,11 @@ import {
   clearAllSampleDataFromSupabase,
   SUPABASE_URL,
   fetchDriversFromSupabase,
-  upsertDriverInSupabase
+  upsertDriverInSupabase,
+  upsertCouponInSupabase,
+  upsertTariffConfigInSupabase,
+  upsertPayoutRequestInSupabase,
+  upsertSupportTicketInSupabase
 } from '../services/supabaseClient';
 import { openWhatsAppDirect, buildProductWhatsAppOrderMessage } from '../utils/urlUtils';
 import { buildSafeBusinessBanner } from '../utils/imageUtils';
@@ -143,9 +154,13 @@ interface AppContextType {
   orders: Order[];
   createOrder: (orderData: Omit<Order, 'id' | 'createdAt'>, options?: { preserveCart?: boolean }) => Order;
   updateOrderStatus: (orderId: string, newStatus: OrderStatus) => void;
+  acceptOrderWithPrepTime: (orderId: string, prepTimeMinutes: number) => void;
+  autoAssignNearestDriver: (orderId: string) => { success: boolean; message: string; driverName?: string };
   assignOrderDriver: (orderId: string, driver: { id?: string; name: string; phone: string; vehicle?: string }) => void;
-  rateOrder: (orderId: string, rating: number, comment?: string) => void;
+  rateOrder: (orderId: string, rating: number, comment?: string, driverRating?: number, driverComment?: string) => void;
   cancelOrderWithReason: (orderId: string, reason: string) => void;
+  issueOrderRefund: (orderId: string, amountBs: number, reason: string) => void;
+  reorderItems: (orderId: string) => { success: boolean; count: number; message: string };
   isSoundAlertEnabled: boolean;
   setIsSoundAlertEnabled: (enabled: boolean) => void;
   playOrderChime: () => void;
@@ -158,6 +173,7 @@ interface AppContextType {
     customization?: {
       selectedVariantOption?: { variantName: string; optionLabel: string; priceDelta: number };
       selectedExtras?: SelectedExtra[];
+      selectedModifiers?: { groupName: string; optionLabel: string; priceDelta: number }[];
       kitchenNotes?: string;
     }
   ) => void;
@@ -228,12 +244,37 @@ interface AppContextType {
   deferredInstallPrompt: any;
   isAppInstalled: boolean;
   installPWA: () => void;
+  pwaInstallHint: string | null;
+  clearPwaInstallHint: () => void;
   showInstallBanner: boolean;
   setShowInstallBanner: (show: boolean) => void;
 
-  // Utilities
+  // Utilities & Platform Engine (Tariffs, Coupons, Banners, Support, Payouts)
   calculateDistance: (destCoords: Coordinates) => number;
+  calculateDynamicDeliveryFee: (
+    businessCoords: Coordinates | undefined,
+    deliveryType: 'delivery' | 'pickup'
+  ) => { feeBs: number; distanceKm: number; multiplierLabel?: string };
   openExternalNavigation: (coords: Coordinates, app: 'google_maps' | 'waze') => void;
+  tariffConfig: PlatformTariffConfig;
+  updateTariffConfig: (updates: Partial<PlatformTariffConfig>) => void;
+  coupons: PromoCoupon[];
+  addCoupon: (coupon: Omit<PromoCoupon, 'id' | 'usedCount' | 'createdAt'>) => void;
+  toggleCoupon: (id: string) => void;
+  deleteCoupon: (id: string) => void;
+  validateCoupon: (
+    code: string,
+    subtotalBs: number
+  ) => { valid: boolean; coupon?: PromoCoupon; discountBs: number; freeDelivery: boolean; message: string };
+  promoBanners: PromoBanner[];
+  addPromoBanner: (banner: Omit<PromoBanner, 'id'>) => void;
+  deletePromoBanner: (id: string) => void;
+  payoutRequests: DriverPayoutRequest[];
+  requestDriverPayout: (driverId: string, amountBs: number) => { success: boolean; message: string };
+  processDriverPayout: (payoutId: string, status: 'paid' | 'rejected') => void;
+  supportTickets: SupportTicket[];
+  createSupportTicket: (ticket: Omit<SupportTicket, 'id' | 'status' | 'createdAt'>) => SupportTicket;
+  resolveSupportTicket: (ticketId: string, status: 'resolved' | 'refunded', resolutionNote?: string) => void;
 
   // Supabase PostgreSQL Integration
   supabaseStatus: {
@@ -358,6 +399,7 @@ interface AppContextType {
     password?: string;
     phone: string;
     ciDni: string;
+    vehicleType?: DriverVehicleType;
     motorcycleBrandModel: string;
     plateNumber: string;
     driverLicense?: string;
@@ -375,7 +417,11 @@ interface AppContextType {
   updateDriverProfile: (driverId: string, updates: Partial<DriverProfile>) => Promise<void>;
   toggleDriverAvailability: (driverId?: string) => void;
   acceptOrderAsDriver: (orderId: string, driverId?: string) => void;
-  advanceDriverDeliveryStep: (orderId: string, step: DriverStep) => void;
+  advanceDriverDeliveryStep: (
+    orderId: string,
+    step: DriverStep,
+    validation?: { pin?: string; proofPhoto?: string }
+  ) => { success: boolean; message?: string };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -383,33 +429,85 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 // Default coordinates: Caracas, Venezuela (fallback if no GPS)
 const DEFAULT_CENTER_COORDS: Coordinates = { lat: 10.4806, lng: -66.9036 };
 
+const DEFAULT_TARIFF_CONFIG: PlatformTariffConfig = {
+  baseDeliveryFeeBs: 35,
+  perKmFeeBs: 15,
+  dynamicMultiplier: 1.0,
+  dynamicLabel: 'Tarifa Normal',
+  defaultCommissionRate: 10,
+  serviceFeeRatePercent: 5,
+  orderAcceptTimeoutMin: 5,
+  driverOfferTimeoutSec: 45
+};
+
+const DEFAULT_PROMO_COUPONS: PromoCoupon[] = [
+  {
+    id: 'cpn-bienvenido',
+    code: 'CONFORCE15',
+    description: '15% de descuento en pedidos desde Bs. 300',
+    discountType: 'percent',
+    discountValue: 15,
+    minOrderBs: 300,
+    maxUses: 200,
+    usedCount: 0,
+    expiresAt: '2026-12-31',
+    isActive: true,
+    createdAt: '2026-01-01'
+  },
+  {
+    id: 'cpn-envio',
+    code: 'ENVIOGRATIS',
+    description: 'Delivery gratis en compras desde Bs. 450',
+    discountType: 'free_delivery',
+    discountValue: 0,
+    minOrderBs: 450,
+    maxUses: 150,
+    usedCount: 0,
+    expiresAt: '2026-12-31',
+    isActive: true,
+    createdAt: '2026-01-01'
+  }
+];
+
+const DEFAULT_PROMO_BANNERS: PromoBanner[] = [
+  {
+    id: 'bnr-1',
+    title: '15% OFF en tu primera orden',
+    subtitle: 'Usa el cupón CONFORCE15 en restaurantes y farmacias aliadas',
+    badge: 'PROMO ACTIVA',
+    couponCode: 'CONFORCE15',
+    bgColor: 'from-[#D4021D] to-rose-700',
+    isActive: true
+  },
+  {
+    id: 'bnr-2',
+    title: 'Envío Gratis Hoy en Venezuela',
+    subtitle: 'Aplica el código ENVIOGRATIS en pedidos desde Bs. 450',
+    badge: 'DELIVERY EXPRESS',
+    couponCode: 'ENVIOGRATIS',
+    bgColor: 'from-zinc-900 to-slate-800',
+    isActive: true
+  }
+];
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Roles & View Tabs - Synchronized with URL parameters and persistent state
+  // Roles & View Tabs - Strictly enforce RBAC from active authenticated session
   const [currentRole, setCurrentRole] = useState<Role>(() => {
-    if (typeof window !== 'undefined') {
-      const search = window.location.search.toLowerCase();
-      const path = window.location.pathname.toLowerCase();
-      const hash = window.location.hash.toLowerCase();
-      if (search.includes('role=admin') || search.includes('view=admin') || path.includes('/admin') || hash.includes('admin')) {
-        return 'admin';
-      }
-      if (search.includes('role=seller') || search.includes('view=seller') || path.includes('/seller') || hash.includes('seller')) {
-        return 'seller';
-      }
-      if (search.includes('role=driver') || search.includes('view=driver') || path.includes('/driver') || hash.includes('driver')) {
-        return 'driver';
-      }
-    }
     const savedUser = localStorage.getItem('mk_current_user');
     if (savedUser) {
       try {
         const u = JSON.parse(savedUser);
-        if (u?.role) return u.role;
+        if (u?.role === 'admin') {
+          const savedRole = localStorage.getItem('mk_current_role') as Role;
+          if (savedRole === 'admin' || savedRole === 'seller' || savedRole === 'client' || savedRole === 'driver') {
+            return savedRole;
+          }
+          return 'admin';
+        }
+        if (u?.role === 'seller' || u?.role === 'driver' || u?.role === 'client') {
+          return u.role;
+        }
       } catch (e) {}
-    }
-    const savedRole = localStorage.getItem('mk_current_role') as Role;
-    if (savedRole === 'admin' || savedRole === 'seller' || savedRole === 'client' || savedRole === 'driver') {
-      return savedRole;
     }
     return 'client';
   });
@@ -667,7 +765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_CLIENTS;
   });
 
-  // Logged-in User State (with auto-guarantee for admin access)
+  // Logged-in User State (restored solely from authenticated session)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('mk_current_user');
     if (saved) {
@@ -675,31 +773,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return JSON.parse(saved);
       } catch (e) {}
     }
-    // If URL points to admin or corporate role, guarantee Harold as active admin
-    if (typeof window !== 'undefined') {
-      const search = window.location.search.toLowerCase();
-      const path = window.location.pathname.toLowerCase();
-      const hash = window.location.hash.toLowerCase();
-      if (search.includes('role=admin') || search.includes('view=admin') || path.includes('/admin') || hash.includes('admin')) {
-        const harold = INITIAL_USERS.find(u => u.username === 'haroldo90');
-        if (harold) {
-          try {
-            localStorage.setItem('mk_current_user', JSON.stringify(harold));
-            localStorage.setItem('mk_current_role', 'admin');
-          } catch (e) {}
-          return harold;
-        }
-      }
-    }
     return null;
   });
 
-  // Keep mk_current_role in localStorage in sync
+  // Enforce strict RBAC lock: only Admin can switch roles freely; all other roles stay locked to their own view
   useEffect(() => {
+    if (!currentUser) {
+      if (currentRole !== 'client') {
+        setCurrentRole('client');
+      }
+    } else if (currentUser.role !== 'admin' && currentRole !== currentUser.role) {
+      setCurrentRole(currentUser.role);
+    }
     try {
       localStorage.setItem('mk_current_role', currentRole);
     } catch (e) {}
-  }, [currentRole]);
+  }, [currentRole, currentUser]);
 
   // Synchronize selectedBusinessId with currentUser's owned business when role is seller
   useEffect(() => {
@@ -855,11 +944,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsCorporateAuthModalOpen(true);
         }
       } else if (search.includes('role=seller') || search.includes('view=seller') || path.includes('/seller') || hash.includes('seller')) {
-        if (currentUser?.role === 'seller') {
+        if (currentUser?.role === 'seller' || currentUser?.role === 'admin') {
           setCurrentRole('seller');
           setActiveSellerTab('orders');
         } else {
           setCorporateAuthInitialTab('seller');
+          setIsCorporateAuthModalOpen(true);
+        }
+      } else if (search.includes('role=driver') || search.includes('view=driver') || path.includes('/driver') || hash.includes('driver')) {
+        if (currentUser?.role === 'driver' || currentUser?.role === 'admin') {
+          setCurrentRole('driver');
+          setActiveDriverTab('deliveries');
+        } else {
+          setCorporateAuthInitialTab('driver');
           setIsCorporateAuthModalOpen(true);
         }
       }
@@ -1697,7 +1794,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const switchRole = (targetRole: Role): { allowed: boolean; message?: string } => {
-    // Admin has unrestricted access to all roles
+    // Only authenticated Superadministrators can freely switch across all 4 system roles
     if (currentUser?.role === 'admin') {
       setCurrentRole(targetRole);
       if (targetRole === 'client') setActiveClientTab('explore');
@@ -1707,61 +1804,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { allowed: true };
     }
 
-    // Direct entry to Admin is guaranteed for authorized system administrators
-    if (targetRole === 'admin') {
-      loginDirectAsAdmin('harold');
-      return { allowed: true };
-    }
-
-    // Direct entry to Seller if switching to Seller
-    if (targetRole === 'seller') {
-      if (currentUser?.role === 'seller') {
-        setCurrentRole('seller');
-        setActiveSellerTab('orders');
+    // Logged-in non-admin user: strictly locked to their own assigned role
+    if (currentUser) {
+      if (targetRole === currentUser.role) {
+        setCurrentRole(targetRole);
+        if (targetRole === 'client') setActiveClientTab('explore');
+        if (targetRole === 'seller') setActiveSellerTab('orders');
+        if (targetRole === 'driver') setActiveDriverTab('deliveries');
         return { allowed: true };
       }
-      loginDirectAsSeller();
-      return { allowed: true };
+      const roleLabels: Record<Role, string> = {
+        client: 'Cliente',
+        seller: 'Comercio / Negocio',
+        driver: 'Repartidor',
+        admin: 'Superadministrador'
+      };
+      return {
+        allowed: false,
+        message: `Acceso restringido: Tu cuenta está asignada al módulo de ${roleLabels[currentUser.role]}. Solo el Superadministrador puede navegar entre múltiples roles.`
+      };
     }
 
-    // Direct entry to Motorizado / Driver
-    if (targetRole === 'driver') {
-      if (currentUser?.role === 'driver') {
-        setCurrentRole('driver');
-        setActiveDriverTab('deliveries');
-        return { allowed: true };
-      }
-      let target = users.find(u => u.role === 'driver' || u.username === 'carlos_moto');
-      if (!target) {
-        target = INITIAL_USERS.find(u => u.role === 'driver') || {
-          id: 'usr-driver-1',
-          name: 'Carlos Mendoza (Motorizado)',
-          username: 'carlos_moto',
-          email: 'carlos.moto@conforce.com',
-          role: 'driver',
-          status: 'active',
-          createdAt: '2026-07-01'
-        };
-        setUsers(prev => [target!, ...prev.filter(p => p.id !== target!.id)]);
-      }
-      setCurrentUser(target);
-      setCurrentRole('driver');
-      setActiveDriverTab('deliveries');
-      try {
-        localStorage.setItem('mk_current_user', JSON.stringify(target));
-        localStorage.setItem('mk_current_role', 'driver');
-      } catch (e) {}
-      return { allowed: true, message: `Sesión iniciada como Motorizado: ${target.name}` };
-    }
-
-    // Switching to client
+    // Unauthenticated guest: allowed only in Client Marketplace; corporate modules require credentials
     if (targetRole === 'client') {
       setCurrentRole('client');
       setActiveClientTab('explore');
       return { allowed: true };
     }
 
-    return { allowed: true };
+    return {
+      allowed: false,
+      message: 'Debes iniciar sesión con credenciales autorizadas para ingresar a este módulo.'
+    };
   };
 
   // Admin CRUD for Users
@@ -2396,6 +2470,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return Array.from(map.values());
           });
         }
+
+        // Hydrate extended platform tables if present in Supabase
+        try {
+          const { data: cpnRows } = await supabase.from('promo_coupons').select('*');
+          if (cpnRows && cpnRows.length > 0) {
+            setCoupons(
+              cpnRows.map((r: any) => ({
+                id: r.id,
+                code: r.code,
+                description: r.description || '',
+                discountType: r.discount_type || 'percent',
+                discountValue: Number(r.discount_value || 0),
+                minOrderBs: Number(r.min_order_bs || 0),
+                maxUses: Number(r.max_uses || 100),
+                usedCount: Number(r.used_count || 0),
+                expiresAt: r.expires_at || '2026-12-31',
+                isActive: Boolean(r.is_active ?? true),
+                createdAt: r.created_at || new Date().toISOString()
+              }))
+            );
+          }
+        } catch {}
+
+        try {
+          const { data: tariffRows } = await supabase.from('platform_tariffs').select('*').limit(1);
+          if (tariffRows && tariffRows[0]) {
+            const r: any = tariffRows[0];
+            setTariffConfig({
+              baseDeliveryFeeBs: Number(r.base_delivery_fee_bs ?? 35),
+              perKmFeeBs: Number(r.per_km_fee_bs ?? 15),
+              dynamicMultiplier: Number(r.dynamic_multiplier ?? 1),
+              dynamicLabel: r.dynamic_label || 'Tarifa Normal',
+              defaultCommissionRate: Number(r.default_commission_rate ?? 10),
+              serviceFeeRatePercent: Number(r.service_fee_rate_percent ?? 5),
+              orderAcceptTimeoutMin: Number(r.order_accept_timeout_min ?? 5),
+              driverOfferTimeoutSec: Number(r.driver_offer_timeout_sec ?? 45)
+            });
+          }
+        } catch {}
+
+        try {
+          const { data: payRows } = await supabase
+            .from('driver_payouts')
+            .select('*')
+            .order('requested_at', { ascending: false });
+          if (payRows && payRows.length > 0) {
+            setPayoutRequests(
+              payRows.map((r: any) => ({
+                id: r.id,
+                driverId: r.driver_id,
+                driverName: r.driver_name,
+                amountBs: Number(r.amount_bs || 0),
+                bankName: r.bank_name || '',
+                bankPhone: r.bank_phone || '',
+                bankIdNumber: r.bank_id_number || '',
+                status: r.status || 'pending',
+                requestedAt: r.requested_at || '',
+                processedAt: r.processed_at || undefined
+              }))
+            );
+          }
+        } catch {}
+
+        try {
+          const { data: tktRows } = await supabase
+            .from('support_tickets')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (tktRows && tktRows.length > 0) {
+            setSupportTickets(
+              tktRows.map((r: any) => ({
+                id: r.id,
+                orderId: r.order_id || undefined,
+                requesterName: r.requester_name,
+                requesterRole: (r.requester_role as Role) || 'client',
+                subject: r.subject,
+                message: r.message,
+                status: r.status || 'open',
+                resolutionNote: r.resolution_note || undefined,
+                createdAt: r.created_at || ''
+              }))
+            );
+          }
+        } catch {}
       } catch (err) {
         console.warn('Error hydrating state from Supabase:', err);
       }
@@ -2420,6 +2578,259 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     checkSupabase();
   }, []);
+
+  // Platform Tariffs, Coupons, Banners, Driver Payouts & Support Tickets State
+  const [tariffConfig, setTariffConfig] = useState<PlatformTariffConfig>(() => {
+    try {
+      const saved = localStorage.getItem('mk_tariff_config');
+      if (saved) return { ...DEFAULT_TARIFF_CONFIG, ...JSON.parse(saved) };
+    } catch {}
+    return DEFAULT_TARIFF_CONFIG;
+  });
+
+  useEffect(() => {
+    safeSetLocalStorage('mk_tariff_config', JSON.stringify(tariffConfig));
+  }, [tariffConfig]);
+
+  const updateTariffConfig = (updates: Partial<PlatformTariffConfig>) => {
+    setTariffConfig((prev) => {
+      const next = { ...prev, ...updates };
+      upsertTariffConfigInSupabase(next).catch(() => {});
+      return next;
+    });
+  };
+
+  const [coupons, setCoupons] = useState<PromoCoupon[]>(() => {
+    try {
+      const saved = localStorage.getItem('mk_promo_coupons');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return DEFAULT_PROMO_COUPONS;
+  });
+
+  useEffect(() => {
+    safeSetLocalStorage('mk_promo_coupons', JSON.stringify(coupons));
+  }, [coupons]);
+
+  const addCoupon = (couponData: Omit<PromoCoupon, 'id' | 'usedCount' | 'createdAt'>) => {
+    const newCpn: PromoCoupon = {
+      ...couponData,
+      code: couponData.code.trim().toUpperCase(),
+      id: `cpn-${Date.now()}`,
+      usedCount: 0,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+    setCoupons((prev) => [newCpn, ...prev]);
+    upsertCouponInSupabase(newCpn).catch(() => {});
+  };
+
+  const toggleCoupon = (id: string) => {
+    setCoupons((prev) =>
+      prev.map((c) => {
+        if (c.id === id) {
+          const next = { ...c, isActive: !c.isActive };
+          upsertCouponInSupabase(next).catch(() => {});
+          return next;
+        }
+        return c;
+      })
+    );
+  };
+
+  const deleteCoupon = (id: string) => {
+    setCoupons((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const validateCoupon = (code: string, subtotalBs: number) => {
+    const clean = code.trim().toUpperCase();
+    if (!clean) {
+      return { valid: false, discountBs: 0, freeDelivery: false, message: 'Ingresa un código promocional.' };
+    }
+    const found = coupons.find((c) => c.code.toUpperCase() === clean);
+    if (!found) {
+      return { valid: false, discountBs: 0, freeDelivery: false, message: 'Cupón no válido o inexistente.' };
+    }
+    if (!found.isActive) {
+      return { valid: false, discountBs: 0, freeDelivery: false, message: 'Este cupón ya no está activo.' };
+    }
+    if (found.usedCount >= found.maxUses) {
+      return { valid: false, discountBs: 0, freeDelivery: false, message: 'Este cupón alcanzó el límite máximo de usos.' };
+    }
+    if (found.expiresAt && found.expiresAt < new Date().toISOString().split('T')[0]) {
+      return { valid: false, discountBs: 0, freeDelivery: false, message: 'Este cupón ha expirado.' };
+    }
+    if (subtotalBs < found.minOrderBs) {
+      return {
+        valid: false,
+        discountBs: 0,
+        freeDelivery: false,
+        message: `El pedido mínimo para este cupón es Bs. ${found.minOrderBs}.`
+      };
+    }
+
+    if (found.discountType === 'free_delivery') {
+      return {
+        valid: true,
+        coupon: found,
+        discountBs: 0,
+        freeDelivery: true,
+        message: `¡Cupón ${found.code} aplicado! Delivery gratis en esta orden.`
+      };
+    }
+
+    const discountBs =
+      found.discountType === 'percent'
+        ? Math.round((subtotalBs * found.discountValue) / 100)
+        : Math.min(subtotalBs, found.discountValue);
+
+    return {
+      valid: true,
+      coupon: found,
+      discountBs,
+      freeDelivery: false,
+      message: `¡Cupón ${found.code} aplicado! Ahorras Bs. ${discountBs}.`
+    };
+  };
+
+  const [promoBanners, setPromoBanners] = useState<PromoBanner[]>(() => {
+    try {
+      const saved = localStorage.getItem('mk_promo_banners');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return DEFAULT_PROMO_BANNERS;
+  });
+
+  useEffect(() => {
+    safeSetLocalStorage('mk_promo_banners', JSON.stringify(promoBanners));
+  }, [promoBanners]);
+
+  const addPromoBanner = (banner: Omit<PromoBanner, 'id'>) => {
+    setPromoBanners((prev) => [{ ...banner, id: `bnr-${Date.now()}` }, ...prev]);
+  };
+
+  const deletePromoBanner = (id: string) => {
+    setPromoBanners((prev) => prev.filter((b) => b.id !== id));
+  };
+
+  const [payoutRequests, setPayoutRequests] = useState<DriverPayoutRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem('mk_driver_payouts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    safeSetLocalStorage('mk_driver_payouts', JSON.stringify(payoutRequests));
+  }, [payoutRequests]);
+
+  const requestDriverPayout = (driverId: string, amountBs: number) => {
+    const drv = drivers.find((d) => d.id === driverId);
+    if (!drv) return { success: false, message: 'Perfil de repartidor no encontrado.' };
+    const netAvailable = Math.max(
+      0,
+      (drv.earningsBalance || 0) + (drv.tipsBalance || 0) + (drv.bonusBalance || 0) - (drv.cashCollectedDebt || 0)
+    );
+    if (amountBs <= 0 || amountBs > netAvailable) {
+      return {
+        success: false,
+        message: `Monto inválido. Tu saldo neto disponible para retiro es Bs. ${netAvailable.toLocaleString()}.`
+      };
+    }
+
+    const req: DriverPayoutRequest = {
+      id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
+      driverId: drv.id,
+      driverName: drv.fullName,
+      amountBs,
+      bankName: drv.bankName || 'Pago Móvil Bancario',
+      bankPhone: drv.bankPhone || drv.phone,
+      bankIdNumber: drv.bankIdNumber || drv.ciDni,
+      status: 'pending',
+      requestedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+    };
+    setPayoutRequests((prev) => [req, ...prev]);
+    upsertPayoutRequestInSupabase(req).catch(() => {});
+    return { success: true, message: `Solicitud de retiro #${req.id} enviada por Bs. ${amountBs}.` };
+  };
+
+  const processDriverPayout = (payoutId: string, status: 'paid' | 'rejected') => {
+    const target = payoutRequests.find((p) => p.id === payoutId);
+    if (!target || target.status !== 'pending') return;
+    const processedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    setPayoutRequests((prev) =>
+      prev.map((p) => (p.id === payoutId ? { ...p, status, processedAt } : p))
+    );
+    upsertPayoutRequestInSupabase({ ...target, status, processedAt }).catch(() => {});
+
+    if (status === 'paid') {
+      setDrivers((prev) =>
+        prev.map((d) => {
+          if (d.id === target.driverId) {
+            const newBal = Math.max(0, (d.earningsBalance || 0) - target.amountBs);
+            const updatedDrv = { ...d, earningsBalance: newBal };
+            upsertDriverInSupabase(updatedDrv).catch(() => {});
+            return updatedDrv;
+          }
+          return d;
+        })
+      );
+    }
+  };
+
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(() => {
+    try {
+      const saved = localStorage.getItem('mk_support_tickets');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    safeSetLocalStorage('mk_support_tickets', JSON.stringify(supportTickets));
+  }, [supportTickets]);
+
+  const createSupportTicket = (ticketData: Omit<SupportTicket, 'id' | 'status' | 'createdAt'>): SupportTicket => {
+    const newTkt: SupportTicket = {
+      ...ticketData,
+      id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+      status: 'open',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+    };
+    setSupportTickets((prev) => [newTkt, ...prev]);
+    upsertSupportTicketInSupabase(newTkt).catch(() => {});
+    return newTkt;
+  };
+
+  const resolveSupportTicket = (
+    ticketId: string,
+    status: 'resolved' | 'refunded',
+    resolutionNote?: string
+  ) => {
+    setSupportTickets((prev) =>
+      prev.map((t) => {
+        if (t.id === ticketId) {
+          const updated = { ...t, status, resolutionNote: resolutionNote || t.resolutionNote };
+          upsertSupportTicketInSupabase(updated).catch(() => {});
+          return updated;
+        }
+        return t;
+      })
+    );
+  };
 
   // PWA Install State
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
@@ -2780,6 +3191,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return Math.round(dist * 10) / 10;
   };
 
+  // Dynamic Distance-Based Delivery Fee
+  const calculateDynamicDeliveryFee = (
+    businessCoords: Coordinates | undefined,
+    deliveryType: 'delivery' | 'pickup'
+  ) => {
+    if (deliveryType === 'pickup') {
+      return { feeBs: 0, distanceKm: 0 };
+    }
+    const distanceKm = businessCoords ? calculateDistance(businessCoords) : 1.5;
+    const raw =
+      (tariffConfig.baseDeliveryFeeBs + distanceKm * tariffConfig.perKmFeeBs) *
+      (tariffConfig.dynamicMultiplier || 1);
+    const feeBs = Math.max(tariffConfig.baseDeliveryFeeBs, Math.round(raw));
+    return {
+      feeBs,
+      distanceKm,
+      multiplierLabel:
+        tariffConfig.dynamicMultiplier > 1 ? tariffConfig.dynamicLabel : undefined
+    };
+  };
+
   // Open external routing (Google Maps or Waze)
   const openExternalNavigation = (coords: Coordinates, app: 'google_maps' | 'waze') => {
     if (app === 'google_maps') {
@@ -2790,6 +3222,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
+
+  const [pwaInstallHint, setPwaInstallHint] = useState<string | null>(null);
+  const clearPwaInstallHint = () => setPwaInstallHint(null);
 
   // PWA Install Action
   const installPWA = async () => {
@@ -2802,7 +3237,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       setDeferredInstallPrompt(null);
     } else {
-      alert('Para instalar la App en tu móvil:\n1. En iOS Safari: Toca el botón Compartir y elige "Agregar al inicio".\n2. En Android Chrome: Toca el menú (3 puntos) y elige "Instalar aplicación".');
+      setPwaInstallHint(
+        'Para instalar la App en tu móvil: en iOS Safari toca Compartir -> "Agregar al inicio"; en Android Chrome toca el menú (3 puntos) -> "Instalar aplicación".'
+      );
     }
   };
 
@@ -2879,12 +3316,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Orders
   const createOrder = (orderData: Omit<Order, 'id' | 'createdAt'>, options?: { preserveCart?: boolean }): Order => {
+    const generatedPin = orderData.deliveryPin || String(Math.floor(1000 + Math.random() * 9000));
     const newOrder: Order = {
       ...orderData,
+      deliveryPin: generatedPin,
+      customerUsername: orderData.customerUsername || currentUser?.username,
       id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: 'Justo ahora'
     };
     setOrders(prev => [newOrder, ...prev]);
+
+    if (newOrder.promoCode) {
+      setCoupons(prev =>
+        prev.map(c => {
+          if (c.code.toUpperCase() === newOrder.promoCode?.toUpperCase()) {
+            const nextC = { ...c, usedCount: c.usedCount + 1 };
+            upsertCouponInSupabase(nextC).catch(() => {});
+            return nextC;
+          }
+          return c;
+        })
+      );
+    }
+
     if (!options?.preserveCart) {
       clearCart();
     }
@@ -2974,6 +3428,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateOrderStatusInSupabase(orderId, newStatus);
   };
 
+  const acceptOrderWithPrepTime = (orderId: string, prepTimeMinutes: number) => {
+    const acceptedAt = new Date().toISOString();
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === orderId
+          ? { ...o, status: 'preparing', prepTimeMinutes, acceptedAt }
+          : o
+      )
+    );
+    updateOrderInSupabase(orderId, {
+      status: 'preparing',
+      prepTimeMinutes,
+      acceptedAt
+    });
+  };
+
   const assignOrderDriver = (orderId: string, driver: { id?: string; name: string; phone: string; vehicle?: string }) => {
     const assignedAt = new Date().toISOString();
     setOrders(prev =>
@@ -3003,6 +3473,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } as any);
   };
 
+  const autoAssignNearestDriver = (orderId: string): { success: boolean; message: string; driverName?: string } => {
+    const order = orders.find(o => o.id === orderId);
+    const biz = businesses.find(b => b.id === order?.businessId);
+    const activeDrivers = drivers.filter(d => d.status === 'active');
+    if (activeDrivers.length === 0) {
+      return { success: false, message: 'No hay repartidores activos disponibles en este momento.' };
+    }
+    const onlinePool = activeDrivers.filter(d => d.isAvailable);
+    const pool = onlinePool.length > 0 ? onlinePool : activeDrivers;
+
+    let selected = pool[0];
+    if (biz?.coordinates) {
+      let bestDist = Infinity;
+      for (const drv of pool) {
+        if (drv.currentCoords) {
+          const dLat = (drv.currentCoords.lat - biz.coordinates.lat);
+          const dLng = (drv.currentCoords.lng - biz.coordinates.lng);
+          const dist = Math.hypot(dLat, dLng);
+          if (dist < bestDist) {
+            bestDist = dist;
+            selected = drv;
+          }
+        }
+      }
+    }
+
+    assignOrderDriver(orderId, {
+      id: selected.id,
+      name: selected.fullName,
+      phone: selected.phone,
+      vehicle: `${selected.motorcycleBrandModel} (${selected.plateNumber})`
+    });
+    return {
+      success: true,
+      driverName: selected.fullName,
+      message: `Pedido #${orderId} asignado automáticamente a ${selected.fullName}.`
+    };
+  };
+
   const acceptOrderAsDriver = (orderId: string, driverId?: string) => {
     const drv = drivers.find(d => d.id === (driverId || currentDriverProfile?.id)) || currentDriverProfile;
     if (!drv) return;
@@ -3014,60 +3523,119 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const advanceDriverDeliveryStep = (orderId: string, step: DriverStep) => {
-    setOrders(prev =>
-      prev.map(o => {
-        if (o.id === orderId) {
-          const isDelivered = step === 'delivered';
-          const nowIso = new Date().toISOString();
-          const updated: Order = {
-            ...o,
-            driverStep: step,
-            status: isDelivered ? 'delivered' : o.status,
-            driverDeliveredAt: isDelivered ? nowIso : o.driverDeliveredAt
-          };
+  const advanceDriverDeliveryStep = (
+    orderId: string,
+    step: DriverStep,
+    validation?: { pin?: string; proofPhoto?: string }
+  ): { success: boolean; message?: string } => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (!targetOrder) return { success: false, message: 'Pedido no encontrado.' };
 
-          // Reward driver if delivered
-          if (isDelivered && o.driverId) {
-            const earnedFee = Number(o.deliveryFee || 45);
-            setDrivers(dPrev =>
-              dPrev.map(d => {
-                if (d.id === o.driverId) {
-                  const updatedDrv: DriverProfile = {
-                    ...d,
-                    totalDeliveries: d.totalDeliveries + 1,
-                    earningsBalance: d.earningsBalance + earnedFee
-                  };
-                  upsertDriverInSupabase(updatedDrv);
-                  return updatedDrv;
-                }
-                return d;
-              })
-            );
-          }
+    const isDelivered = step === 'delivered';
+    if (isDelivered && targetOrder.deliveryPin) {
+      const pinMatches = Boolean(validation?.pin && validation.pin.trim() === targetOrder.deliveryPin);
+      const hasPhoto = Boolean(validation?.proofPhoto);
+      if (!pinMatches && !hasPhoto) {
+        return {
+          success: false,
+          message: 'PIN incorrecto. Solicita el código de 4 dígitos al cliente o adjunta foto de entrega.'
+        };
+      }
+    }
 
-          updateOrderInSupabase(orderId, {
-            driver_step: step,
-            status: isDelivered ? 'delivered' : o.status,
-            driver_delivered_at: isDelivered ? nowIso : o.driverDeliveredAt
-          } as any);
-
-          return updated;
+    const nowIso = new Date().toISOString();
+    const biz = businesses.find(b => b.id === targetOrder.businessId);
+    const commRate = biz?.commissionRate ?? tariffConfig.defaultCommissionRate ?? 10;
+    const subtotalNet = Math.max(0, (targetOrder.subtotal || 0) - (targetOrder.discountAmount || 0));
+    const platformCommissionBs = Math.round((subtotalNet * commRate) / 100);
+    const storeNetBs = Math.max(0, subtotalNet - platformCommissionBs);
+    const earnedFee = Number(targetOrder.deliveryFee || 45);
+    const tipEarned = Number(targetOrder.driverTip || 0);
+    const driverPayoutBs = Math.round(earnedFee + tipEarned);
+    const settlementData: OrderSettlement | undefined = isDelivered
+      ? {
+          storeNetBs,
+          driverPayoutBs,
+          platformCommissionBs,
+          settledAt: nowIso
         }
-        return o;
-      })
+      : targetOrder.settlement;
+
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === orderId
+          ? {
+              ...o,
+              driverStep: step,
+              status: isDelivered ? 'delivered' : o.status,
+              driverDeliveredAt: isDelivered ? nowIso : o.driverDeliveredAt,
+              deliveryProofPhoto: validation?.proofPhoto || o.deliveryProofPhoto,
+              cashCollectedByDriver:
+                isDelivered && o.paymentMethod === 'cash_on_delivery' ? o.total : o.cashCollectedByDriver,
+              settlement: settlementData
+            }
+          : o
+      )
     );
+
+    if (isDelivered && targetOrder.driverId) {
+      const cashDebtAdd = targetOrder.paymentMethod === 'cash_on_delivery' ? Number(targetOrder.total || 0) : 0;
+      setDrivers(dPrev =>
+        dPrev.map(d => {
+          if (d.id === targetOrder.driverId) {
+            const updatedDrv: DriverProfile = {
+              ...d,
+              totalDeliveries: d.totalDeliveries + 1,
+              earningsBalance: d.earningsBalance + earnedFee,
+              tipsBalance: (d.tipsBalance || 0) + tipEarned,
+              cashCollectedDebt: (d.cashCollectedDebt || 0) + cashDebtAdd
+            };
+            upsertDriverInSupabase(updatedDrv);
+            return updatedDrv;
+          }
+          return d;
+        })
+      );
+    }
+
+    updateOrderInSupabase(orderId, {
+      driver_step: step,
+      status: isDelivered ? 'delivered' : targetOrder.status,
+      driver_delivered_at: isDelivered ? nowIso : targetOrder.driverDeliveredAt,
+      delivery_proof_photo: validation?.proofPhoto || targetOrder.deliveryProofPhoto,
+      cash_collected_by_driver:
+        isDelivered && targetOrder.paymentMethod === 'cash_on_delivery'
+          ? targetOrder.total
+          : targetOrder.cashCollectedByDriver,
+      settlement: settlementData
+    } as any);
+
+    return { success: true };
   };
 
-  const rateOrder = (orderId: string, rating: number, comment?: string) => {
+  const rateOrder = (
+    orderId: string,
+    rating: number,
+    comment?: string,
+    driverRating?: number,
+    driverComment?: string
+  ) => {
     const ratedAt = new Date().toISOString();
-    const reviewData = { rating, comment: comment?.trim(), ratedAt };
+    const reviewData = {
+      rating,
+      comment: comment?.trim(),
+      driverRating,
+      driverComment: driverComment?.trim(),
+      ratedAt
+    };
     let targetBizId: string | undefined;
+    let targetDriverId: string | undefined;
 
     setOrders(prev =>
       prev.map(o => {
         if (o.id === orderId) {
           targetBizId = o.businessId;
+          targetDriverId = o.driverId;
           return { ...o, review: reviewData };
         }
         return o;
@@ -3093,6 +3661,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })
       );
     }
+
+    // Update driver rating if driverRating provided
+    if (targetDriverId && driverRating) {
+      setDrivers(prev =>
+        prev.map(d => {
+          if (d.id === targetDriverId) {
+            const total = Math.max(1, d.totalDeliveries);
+            const updatedRating = Number((((d.rating || 5) * total + driverRating) / (total + 1)).toFixed(1));
+            const updatedDrv = { ...d, rating: updatedRating };
+            upsertDriverInSupabase(updatedDrv);
+            return updatedDrv;
+          }
+          return d;
+        })
+      );
+    }
   };
 
   const cancelOrderWithReason = (orderId: string, reason: string) => {
@@ -3100,6 +3684,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map(o => (o.id === orderId ? { ...o, status: 'cancelled', cancellationReason: reason } : o))
     );
     updateOrderInSupabase(orderId, { status: 'cancelled', cancellationReason: reason });
+  };
+
+  const issueOrderRefund = (orderId: string, amountBs: number, reason: string) => {
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === orderId
+          ? {
+              ...o,
+              status: 'cancelled',
+              refundAmount: amountBs,
+              refundReason: reason,
+              cancellationReason: `Reembolso Bs. ${amountBs}: ${reason}`
+            }
+          : o
+      )
+    );
+    updateOrderInSupabase(orderId, {
+      status: 'cancelled',
+      refundAmount: amountBs,
+      refundReason: reason,
+      cancellationReason: `Reembolso Bs. ${amountBs}: ${reason}`
+    });
+  };
+
+  const reorderItems = (orderId: string): { success: boolean; count: number; message: string } => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order || order.items.length === 0) {
+      return { success: false, count: 0, message: 'No se encontraron productos en esta orden.' };
+    }
+    clearCart();
+    let count = 0;
+    order.items.forEach(item => {
+      const liveProd = products.find(p => p.id === item.product.id) || item.product;
+      if (liveProd.inStock !== false) {
+        addToCart(liveProd, item.quantity, {
+          selectedVariantOption: item.selectedVariantOption,
+          selectedExtras: item.selectedExtras,
+          selectedModifiers: item.selectedModifiers,
+          kitchenNotes: item.kitchenNotes
+        });
+        count += item.quantity;
+      }
+    });
+    return {
+      success: count > 0,
+      count,
+      message:
+        count > 0
+          ? `Se cargaron ${count} artículo(s) de #${order.id} en tu carrito.`
+          : 'Los artículos de este pedido están agotados actualmente.'
+    };
   };
 
   // Currency & Exchange Rate State (Bolívares Bs. / Dólares $ USD)
@@ -3153,27 +3788,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  // Cart with variant and extras customization support
+  // Cart with variant, modifier groups, and extras customization support
   const addToCart = (
     product: Product,
     quantity = 1,
     customization?: {
       selectedVariantOption?: { variantName: string; optionLabel: string; priceDelta: number };
       selectedExtras?: SelectedExtra[];
+      selectedModifiers?: { groupName: string; optionLabel: string; priceDelta: number }[];
       kitchenNotes?: string;
     }
   ) => {
     const variantDelta = customization?.selectedVariantOption?.priceDelta || 0;
     const extrasTotal = customization?.selectedExtras?.reduce((sum, e) => sum + e.price, 0) || 0;
-    const itemTotalBs = product.price + variantDelta + extrasTotal;
+    const modifiersTotal = customization?.selectedModifiers?.reduce((sum, m) => sum + m.priceDelta, 0) || 0;
+    const itemTotalBs = product.price + variantDelta + extrasTotal + modifiersTotal;
 
     setCart(prev => {
-      // Unique item identity includes variant and extras signature
       const variantKey = customization?.selectedVariantOption
         ? `${customization.selectedVariantOption.variantName}:${customization.selectedVariantOption.optionLabel}`
         : '';
       const extrasKey = customization?.selectedExtras && customization.selectedExtras.length > 0
         ? customization.selectedExtras.map(e => e.id).sort().join(',')
+        : '';
+      const modKey = customization?.selectedModifiers && customization.selectedModifiers.length > 0
+        ? customization.selectedModifiers.map(m => `${m.groupName}:${m.optionLabel}`).sort().join(',')
         : '';
       const notesKey = customization?.kitchenNotes?.trim() || '';
 
@@ -3185,8 +3824,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const itemExtrasKey = item.selectedExtras && item.selectedExtras.length > 0
           ? item.selectedExtras.map(e => e.id).sort().join(',')
           : '';
+        const itemModKey = item.selectedModifiers && item.selectedModifiers.length > 0
+          ? item.selectedModifiers.map(m => `${m.groupName}:${m.optionLabel}`).sort().join(',')
+          : '';
         const itemNotesKey = item.kitchenNotes?.trim() || '';
-        return itemVarKey === variantKey && itemExtrasKey === extrasKey && itemNotesKey === notesKey;
+        return itemVarKey === variantKey && itemExtrasKey === extrasKey && itemModKey === modKey && itemNotesKey === notesKey;
       });
 
       if (matchIndex >= 0) {
@@ -3205,6 +3847,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           businessId: product.businessId,
           selectedVariantOption: customization?.selectedVariantOption,
           selectedExtras: customization?.selectedExtras,
+          selectedModifiers: customization?.selectedModifiers,
           kitchenNotes: customization?.kitchenNotes,
           itemTotalBs
         }
@@ -3240,12 +3883,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cartSubtotal = cart.reduce((sum, item) => {
     const variantDelta = item.selectedVariantOption?.priceDelta || 0;
     const extrasTotal = item.selectedExtras?.reduce((eSum, e) => eSum + e.price, 0) || 0;
-    const unitPrice = item.itemTotalBs ?? (item.product.price + variantDelta + extrasTotal);
+    const modifiersTotal = item.selectedModifiers?.reduce((mSum, m) => mSum + m.priceDelta, 0) || 0;
+    const unitPrice = item.itemTotalBs ?? (item.product.price + variantDelta + extrasTotal + modifiersTotal);
     return sum + unitPrice * item.quantity;
   }, 0);
   const cartSubtotalUsd = exchangeRateUsd > 0 ? cartSubtotal / exchangeRateUsd : 0;
   const cartTotalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const serviceFeeRate = 0.05; // 5% de tarifa de servicio a consumidor
+  const serviceFeeRate = (tariffConfig.serviceFeeRatePercent ?? 5) / 100;
   const cartServiceFee = cartSubtotal > 0 ? Math.max(10, Math.round(cartSubtotal * serviceFeeRate)) : 0;
 
   // Web Assistant (Native In-App Chatbot) Helper
@@ -3469,6 +4113,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password?: string;
     phone: string;
     ciDni: string;
+    vehicleType?: DriverVehicleType;
     motorcycleBrandModel: string;
     plateNumber: string;
     driverLicense?: string;
@@ -3504,6 +4149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: data.email.trim(),
       phone: data.phone.trim(),
       ciDni: data.ciDni.trim().toUpperCase(),
+      vehicleType: data.vehicleType || 'moto',
       motorcycleBrandModel: data.motorcycleBrandModel.trim(),
       plateNumber: data.plateNumber.trim().toUpperCase(),
       driverLicense: data.driverLicense?.trim().toUpperCase(),
@@ -3512,6 +4158,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       rating: 5.0,
       totalDeliveries: 0,
       earningsBalance: 0,
+      tipsBalance: 0,
+      bonusBalance: 0,
+      cashCollectedDebt: 0,
       bankName: data.bankName?.trim() || 'Pago Móvil BDV / Banesco',
       bankPhone: data.bankPhone?.trim() || data.phone.trim(),
       bankIdNumber: data.bankIdNumber?.trim() || data.ciDni.trim(),
@@ -3647,9 +4296,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         orders,
         createOrder,
         updateOrderStatus,
+        acceptOrderWithPrepTime,
+        autoAssignNearestDriver,
         assignOrderDriver,
         rateOrder,
         cancelOrderWithReason,
+        issueOrderRefund,
+        reorderItems,
         isSoundAlertEnabled,
         setIsSoundAlertEnabled,
         playOrderChime,
@@ -3715,11 +4368,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deferredInstallPrompt,
         isAppInstalled,
         installPWA,
+        pwaInstallHint,
+        clearPwaInstallHint,
         showInstallBanner,
         setShowInstallBanner,
 
         calculateDistance,
+        calculateDynamicDeliveryFee,
         openExternalNavigation,
+        tariffConfig,
+        updateTariffConfig,
+        coupons,
+        addCoupon,
+        toggleCoupon,
+        deleteCoupon,
+        validateCoupon,
+        promoBanners,
+        addPromoBanner,
+        deletePromoBanner,
+        payoutRequests,
+        requestDriverPayout,
+        processDriverPayout,
+        supportTickets,
+        createSupportTicket,
+        resolveSupportTicket,
 
         // Supabase Database Integration
         supabaseStatus,

@@ -47,7 +47,11 @@ import {
   AlertTriangle,
   RotateCcw,
   LogOut,
-  Bike
+  Bike,
+  SlidersHorizontal,
+  Tag,
+  LifeBuoy,
+  Wallet
 } from 'lucide-react';
 import { SupabaseAdminView } from './SupabaseAdminView';
 import { AdminUsersView } from './AdminUsersView';
@@ -77,6 +81,22 @@ export const SuperAdminDashboard: React.FC = () => {
     drivers,
     failedSearches,
     serviceFeeRate,
+    tariffConfig,
+    updateTariffConfig,
+    coupons,
+    addCoupon,
+    toggleCoupon,
+    deleteCoupon,
+    promoBanners,
+    addPromoBanner,
+    deletePromoBanner,
+    payoutRequests,
+    processDriverPayout,
+    supportTickets,
+    resolveSupportTicket,
+    issueOrderRefund,
+    cancelOrderWithReason,
+    formatCurrency,
     clearAllSampleData,
     restoreSampleData,
     isMockDataCleared,
@@ -88,16 +108,56 @@ export const SuperAdminDashboard: React.FC = () => {
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
   const [clearToast, setClearToast] = useState<{ success: boolean; message: string } | null>(null);
 
+  const showAdminToast = (message: string, success = true) => {
+    setClearToast({ success, message });
+    setTimeout(() => setClearToast(null), 4000);
+  };
+
+  // Tariff Config Editor State
+  const [baseFee, setBaseFee] = useState(tariffConfig.baseDeliveryFeeBs);
+  const [perKmFee, setPerKmFee] = useState(tariffConfig.perKmFeeBs);
+  const [dynMult, setDynMult] = useState(tariffConfig.dynamicMultiplier);
+  const [dynLabel, setDynLabel] = useState(tariffConfig.dynamicLabel);
+  const [defCommission, setDefCommission] = useState(tariffConfig.defaultCommissionRate);
+  const [svcFeePct, setSvcFeePct] = useState(tariffConfig.serviceFeeRatePercent);
+  const [acceptTimeout, setAcceptTimeout] = useState(tariffConfig.orderAcceptTimeoutMin);
+  const [driverTimeout, setDriverTimeout] = useState(tariffConfig.driverOfferTimeoutSec);
+
+  // Marketing: Coupons & Banners State
+  const [cpnCode, setCpnCode] = useState('');
+  const [cpnDesc, setCpnDesc] = useState('');
+  const [cpnType, setCpnType] = useState<'percent' | 'fixed_bs' | 'free_delivery'>('percent');
+  const [cpnVal, setCpnVal] = useState(15);
+  const [cpnMin, setCpnMin] = useState(100);
+  const [cpnMaxUses, setCpnMaxUses] = useState(200);
+
+  const [bnrTitle, setBnrTitle] = useState('');
+  const [bnrSub, setBnrSub] = useState('');
+  const [bnrBadge, setBnrBadge] = useState('PROMO FLASH');
+  const [bnrCoupon, setBnrCoupon] = useState('');
+  const [bnrColor, setBnrColor] = useState('#D4021D');
+
+  // Support & Refunds State
+  const [refundOrderId, setRefundOrderId] = useState('');
+  const [refundAmt, setRefundAmt] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [ticketNotes, setTicketNotes] = useState<Record<string, string>>({});
+
   // Metrics Calculations (Defensively protected against null/empty state)
   const safeOrders = orders || [];
   const safeBusinesses = businesses || [];
   const safeProducts = products || [];
-  const safeCampaigns = campaigns || [];
 
   const totalSales = safeOrders.reduce((sum, o) => sum + (o?.total || 0), 0);
   const deliveryOrdersCount = safeOrders.filter((o) => o?.deliveryType === 'delivery').length;
   const pickupOrdersCount = safeOrders.filter((o) => o?.deliveryType === 'pickup').length;
   const activeSellersCount = safeBusinesses.filter((b) => b?.isActive).length;
+  const activeOrdersNowCount = safeOrders.filter((o) =>
+    ['pending_confirmation', 'preparing', 'ready', 'on_the_way'].includes(o.status)
+  ).length;
+  const onlineDriversCount = drivers.filter((d) => d.isAvailable && d.status === 'active').length;
+  const openTicketsCount = supportTickets.filter((t) => t.status === 'open').length;
+  const pendingPayoutsCount = payoutRequests.filter((p) => p.status === 'pending').length;
   const totalBotInteractions = 1420 + safeOrders.length * 12;
 
   // Seller CRUD States
@@ -459,6 +519,9 @@ export const SuperAdminDashboard: React.FC = () => {
           { id: 'drivers', label: `Mensajeros Moto (${drivers.length})`, icon: <Bike className="w-4 h-4 text-emerald-500" /> },
           { id: 'employees', label: `Colaboradores (${employees.length})`, icon: <Briefcase className="w-4 h-4" /> },
           { id: 'sellers', label: `Gestión de Negocios (${businesses.length})`, icon: <Store className="w-4 h-4" /> },
+          { id: 'tariffs', label: 'Motor de Tarifas', icon: <SlidersHorizontal className="w-4 h-4 text-sky-600" /> },
+          { id: 'marketing', label: `Cupones & Banners (${coupons.length})`, icon: <Tag className="w-4 h-4 text-pink-600" /> },
+          { id: 'support', label: `Soporte & Retiros (${openTicketsCount + pendingPayoutsCount})`, icon: <LifeBuoy className="w-4 h-4 text-amber-600" /> },
           { id: 'whatsapp', label: 'WhatsApp & Bot IA', icon: <MessageSquare className="w-4 h-4" /> },
           { id: 'map', label: 'Mapa & Navegación', icon: <Layers className="w-4 h-4" /> },
           { id: 'radar', label: `Radar de Demanda (${failedSearches.length})`, icon: <Radar className="w-4 h-4 text-amber-500" /> },
@@ -531,6 +594,64 @@ export const SuperAdminDashboard: React.FC = () => {
               <span className="text-[10px] text-[#D4021D] font-bold block">
                 94.2% Apertura · 38% Clicks
               </span>
+            </div>
+          </div>
+
+          {/* Live Operations Strip & Heatmap */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3.5 bg-slate-950 text-white rounded-2xl border border-slate-800">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Pedidos Activos en Vivo</span>
+              <span className="text-xl font-black text-amber-400">{activeOrdersNowCount}</span>
+              <span className="text-[10px] text-slate-400 block">En cocina o en ruta</span>
+            </div>
+            <div className="p-3.5 bg-slate-950 text-white rounded-2xl border border-slate-800">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Repartidores en Línea</span>
+              <span className="text-xl font-black text-emerald-400">{onlineDriversCount} / {drivers.length}</span>
+              <span className="text-[10px] text-slate-400 block">Disponibles en mapa</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('support')}
+              className="p-3.5 bg-amber-50 hover:bg-amber-100 text-left rounded-2xl border border-amber-200 cursor-pointer transition-colors"
+            >
+              <span className="text-[10px] font-bold text-amber-700 uppercase block">Alertas Soporte & Retiros</span>
+              <span className="text-xl font-black text-amber-900">{openTicketsCount + pendingPayoutsCount}</span>
+              <span className="text-[10px] text-amber-700 block">{openTicketsCount} tickets · {pendingPayoutsCount} retiros</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('tariffs')}
+              className="p-3.5 bg-sky-50 hover:bg-sky-100 text-left rounded-2xl border border-sky-200 cursor-pointer transition-colors"
+            >
+              <span className="text-[10px] font-bold text-sky-700 uppercase block">Tarifa Dinámica Activa</span>
+              <span className="text-xl font-black text-sky-900">{tariffConfig.dynamicMultiplier.toFixed(2)}x</span>
+              <span className="text-[10px] text-sky-700 block">{tariffConfig.dynamicLabel}</span>
+            </button>
+          </div>
+
+          {/* City Demand Heat Summary */}
+          <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 space-y-2">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+              Mapa de Calor de Demanda por Ciudad / Zona
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(
+                safeBusinesses.reduce<Record<string, number>>((acc, biz) => {
+                  const city = biz.city || 'Caracas';
+                  const count = safeOrders.filter((o) => o.businessId === biz.id).length;
+                  acc[city] = (acc[city] || 0) + count;
+                  return acc;
+                }, {})
+              ).map(([city, count]) => (
+                <div
+                  key={city}
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs flex items-center gap-2"
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${count >= 3 ? 'bg-[#D4021D]' : count >= 1 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                  <span className="font-bold text-slate-800">{city}:</span>
+                  <span className="font-mono text-slate-600">{count} pedidos</span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -786,7 +907,7 @@ export const SuperAdminDashboard: React.FC = () => {
             <button
               onClick={() => {
                 updateChatbotConfig({ metaApiToken: metaToken, phoneNumberId: phoneId });
-                alert('Configuración de WhatsApp guardada.');
+                showAdminToast('Configuración de WhatsApp Business API guardada.');
               }}
               className="px-4 py-2 bg-[#D4021D] hover:bg-[#b50218] text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer"
             >
@@ -839,7 +960,7 @@ export const SuperAdminDashboard: React.FC = () => {
                       welcomeMessage: welcomeText,
                       featuredOfferId: featuredOffer
                     });
-                    alert('Panel del Bot actualizado.');
+                    showAdminToast('Panel y mensajes del Chatbot IA actualizados.');
                   }}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer shadow-xs"
                 >
@@ -1186,7 +1307,11 @@ export const SuperAdminDashboard: React.FC = () => {
                         </td>
                         <td className="py-3 text-right">
                           <button
-                            onClick={() => alert(`Liquidación de Bs. ${(bizSales - commissionAmount).toLocaleString()} procesada para ${b.name}`)}
+                            onClick={() =>
+                              showAdminToast(
+                                `Liquidación de Bs. ${(bizSales - commissionAmount).toLocaleString()} registrada para ${b.name}.`
+                              )
+                            }
                             className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] cursor-pointer"
                           >
                             Liquidar
@@ -1198,6 +1323,465 @@ export const SuperAdminDashboard: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOTOR DE TARIFAS Y COMISIONES */}
+      {activeAdminTab === 'tariffs' && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-5 max-w-4xl">
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+              <SlidersHorizontal className="w-5 h-5 text-sky-600" />
+              Motor Dinámico de Tarifas, Comisiones y Tiempos
+            </h3>
+            <p className="text-xs text-slate-500">
+              Ajusta tarifa base, precio por kilómetro, multiplicadores por lluvia/hora pico y porcentaje de servicio.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Tarifa Base Envío (Bs.)</label>
+              <input
+                type="number"
+                value={baseFee}
+                onChange={(e) => setBaseFee(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Costo por Kilómetro (Bs./km)</label>
+              <input
+                type="number"
+                value={perKmFee}
+                onChange={(e) => setPerKmFee(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Tarifa Dinámica (Multiplicador)</label>
+              <select
+                value={dynMult}
+                onChange={(e) => {
+                  const m = Number(e.target.value);
+                  setDynMult(m);
+                  if (m === 1) setDynLabel('Tarifa Normal');
+                  else if (m === 1.25) setDynLabel('Hora Pico (+25%)');
+                  else if (m === 1.5) setDynLabel('Lluvia / Alta Demanda (+50%)');
+                }}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+              >
+                <option value={1}>1.00x · Tarifa Normal</option>
+                <option value={1.25}>1.25x · Hora Pico (+25%)</option>
+                <option value={1.5}>1.50x · Lluvia / Alta Demanda (+50%)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Comisión Default Comercios (%)</label>
+              <input
+                type="number"
+                value={defCommission}
+                onChange={(e) => setDefCommission(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Tarifa Servicio App (%)</label>
+              <input
+                type="number"
+                value={svcFeePct}
+                onChange={(e) => setSvcFeePct(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Timeout Aceptar Tienda (min)</label>
+              <input
+                type="number"
+                value={acceptTimeout}
+                onChange={(e) => setAcceptTimeout(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              updateTariffConfig({
+                baseDeliveryFeeBs: baseFee,
+                perKmFeeBs: perKmFee,
+                dynamicMultiplier: dynMult,
+                dynamicLabel: dynLabel,
+                defaultCommissionRate: defCommission,
+                serviceFeeRatePercent: svcFeePct,
+                orderAcceptTimeoutMin: acceptTimeout,
+                driverOfferTimeoutSec: driverTimeout
+              });
+              showAdminToast('Motor de tarifas actualizado en vivo para todo el marketplace.');
+            }}
+            className="px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-sm"
+          >
+            Guardar y Aplicar Tarifas Globales
+          </button>
+        </div>
+      )}
+
+      {/* MARKETING: CUPONES Y BANNERS PROMOCIONALES */}
+      {activeAdminTab === 'marketing' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Cupones */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+              <Tag className="w-5 h-5 text-pink-600" />
+              Cupones Promocionales ({coupons.length})
+            </h3>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <input
+                type="text"
+                placeholder="Código (ej. VENEZUELA20)"
+                value={cpnCode}
+                onChange={(e) => setCpnCode(e.target.value.toUpperCase())}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl uppercase font-bold"
+              />
+              <select
+                value={cpnType}
+                onChange={(e) => setCpnType(e.target.value as any)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+              >
+                <option value="percent">% Descuento</option>
+                <option value="fixed_bs">Monto Fijo Bs.</option>
+                <option value="free_delivery">Envío Gratis</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Descripción breve"
+                value={cpnDesc}
+                onChange={(e) => setCpnDesc(e.target.value)}
+                className="col-span-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+              />
+              <input
+                type="number"
+                placeholder="Valor (% o Bs.)"
+                value={cpnVal}
+                onChange={(e) => setCpnVal(Number(e.target.value))}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+              />
+              <input
+                type="number"
+                placeholder="Mínimo Bs."
+                value={cpnMin}
+                onChange={(e) => setCpnMin(Number(e.target.value))}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!cpnCode.trim()) return;
+                addCoupon({
+                  code: cpnCode.trim().toUpperCase(),
+                  description: cpnDesc.trim() || 'Promoción especial ConForce',
+                  discountType: cpnType,
+                  discountValue: cpnVal,
+                  minOrderBs: cpnMin,
+                  maxUses: cpnMaxUses,
+                  expiresAt: '2026-12-31',
+                  isActive: true
+                });
+                setCpnCode('');
+                setCpnDesc('');
+                showAdminToast('Cupón promocional creado y activado.');
+              }}
+              className="w-full py-2.5 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl text-xs cursor-pointer"
+            >
+              + Crear Cupón de Descuento
+            </button>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {coupons.map((c) => (
+                <div key={c.id} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-black text-slate-900">{c.code}</span>
+                    <span className="block text-[11px] text-slate-500">{c.description} · Usos: {c.usedCount}/{c.maxUses}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleCoupon(c.id)}
+                      className={`px-2 py-1 rounded-lg font-bold text-[10px] cursor-pointer ${
+                        c.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {c.isActive ? 'Activo' : 'Pausado'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteCoupon(c.id)}
+                      className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Banners Promocionales */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-4">
+            <h3 className="font-extrabold text-slate-900 text-base">
+              Banners Promocionales en Home ({promoBanners.length})
+            </h3>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <input
+                type="text"
+                placeholder="Título del Banner"
+                value={bnrTitle}
+                onChange={(e) => setBnrTitle(e.target.value)}
+                className="col-span-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+              />
+              <input
+                type="text"
+                placeholder="Subtítulo o llamada a la acción"
+                value={bnrSub}
+                onChange={(e) => setBnrSub(e.target.value)}
+                className="col-span-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+              />
+              <input
+                type="text"
+                placeholder="Etiqueta (ej. ENVÍO GRATIS)"
+                value={bnrBadge}
+                onChange={(e) => setBnrBadge(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+              />
+              <input
+                type="text"
+                placeholder="Código cupón (opcional)"
+                value={bnrCoupon}
+                onChange={(e) => setBnrCoupon(e.target.value.toUpperCase())}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl uppercase"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!bnrTitle.trim()) return;
+                addPromoBanner({
+                  title: bnrTitle.trim(),
+                  subtitle: bnrSub.trim() || 'Aprovecha nuestras ofertas en tu zona.',
+                  badge: bnrBadge.trim() || 'PROMO',
+                  couponCode: bnrCoupon.trim() || undefined,
+                  bgColor: bnrColor,
+                  isActive: true
+                });
+                setBnrTitle('');
+                setBnrSub('');
+                setBnrCoupon('');
+                showAdminToast('Banner promocional publicado en el Marketplace.');
+              }}
+              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs cursor-pointer"
+            >
+              + Publicar Banner Promocional
+            </button>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {promoBanners.map((b) => (
+                <div key={b.id} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-slate-900">{b.badge} · {b.title}</span>
+                    <span className="block text-[11px] text-slate-500">{b.subtitle}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => deletePromoBanner(b.id)}
+                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SOPORTE, RESOLUCIÓN DE CONFLICTOS, REEMBOLSOS Y RETIROS */}
+      {activeAdminTab === 'support' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Solicitudes de Retiro de Repartidores */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-emerald-600" />
+                Retiros Pago Móvil de Repartidores ({payoutRequests.length})
+              </h3>
+              {payoutRequests.length === 0 ? (
+                <p className="text-xs text-slate-500">No hay solicitudes de retiro registradas.</p>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {payoutRequests.map((pr) => (
+                    <div key={pr.id} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
+                      <div>
+                        <span className="font-bold text-slate-900">{pr.driverName} · {formatCurrency(pr.amountBs).formatted}</span>
+                        <span className="block text-[11px] text-slate-500">
+                          {pr.bankName} · {pr.bankPhone} · {pr.bankIdNumber}
+                        </span>
+                      </div>
+                      {pr.status === 'pending' ? (
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              processDriverPayout(pr.id, 'paid');
+                              showAdminToast(`Pago de ${formatCurrency(pr.amountBs).formatted} aprobado para ${pr.driverName}.`);
+                            }}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg cursor-pointer"
+                          >
+                            Aprobar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              processDriverPayout(pr.id, 'rejected');
+                              showAdminToast('Solicitud de retiro rechazada.', false);
+                            }}
+                            className="px-2.5 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-lg cursor-pointer"
+                          >
+                            Rechazar
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${pr.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                          {pr.status === 'paid' ? 'Pagado ✓' : 'Rechazado'}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Reembolsos y Cancelaciones Directas */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <LifeBuoy className="w-5 h-5 text-amber-600" />
+                Cancelación de Pedidos y Reembolsos
+              </h3>
+              <div className="space-y-3 text-xs">
+                <select
+                  value={refundOrderId}
+                  onChange={(e) => setRefundOrderId(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
+                >
+                  <option value="">Selecciona un pedido...</option>
+                  {safeOrders.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      #{o.id} · {o.customerName} · {formatCurrency(o.total).formatted} ({o.status})
+                    </option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    placeholder="Monto reembolso Bs."
+                    value={refundAmt}
+                    onChange={(e) => setRefundAmt(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Motivo de resolución"
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={!refundOrderId}
+                    onClick={() => {
+                      const target = safeOrders.find((o) => o.id === refundOrderId);
+                      if (!target) return;
+                      issueOrderRefund(target.id, Number(refundAmt) || target.total, refundReason.trim() || 'Reembolso aprobado por Soporte');
+                      showAdminToast(`Reembolso emitido para el pedido #${target.id}.`);
+                      setRefundAmt('');
+                      setRefundReason('');
+                    }}
+                    className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl cursor-pointer"
+                  >
+                    Emitir Reembolso
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!refundOrderId}
+                    onClick={() => {
+                      if (!refundOrderId) return;
+                      cancelOrderWithReason(refundOrderId, refundReason.trim() || 'Cancelado por Centro de Soporte');
+                      showAdminToast(`Pedido #${refundOrderId} cancelado.`);
+                      setRefundReason('');
+                    }}
+                    className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl cursor-pointer"
+                  >
+                    Cancelar Pedido
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tickets Abiertos */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-3">
+            <h3 className="font-extrabold text-slate-900 text-base">
+              Tickets de Ayuda y Reclamos ({supportTickets.length})
+            </h3>
+            {supportTickets.length === 0 ? (
+              <p className="text-xs text-slate-500">No hay tickets de soporte activos.</p>
+            ) : (
+              <div className="space-y-2">
+                {supportTickets.map((t) => (
+                  <div key={t.id} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-slate-900">{t.subject}</span>
+                        <span className="ml-2 px-2 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-bold uppercase">
+                          {t.requesterRole}
+                        </span>
+                        <p className="text-slate-600 mt-0.5">{t.requesterName}: "{t.message}"</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                        t.status === 'open' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {t.status === 'open' ? 'Abierto' : t.status === 'refunded' ? 'Reembolsado' : 'Resuelto'}
+                      </span>
+                    </div>
+                    {t.status === 'open' && (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Nota de solución..."
+                          value={ticketNotes[t.id] || ''}
+                          onChange={(e) => setTicketNotes((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                          className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            resolveSupportTicket(t.id, 'resolved', ticketNotes[t.id] || 'Resuelto por Superadmin');
+                            showAdminToast(`Ticket #${t.id} marcado como resuelto.`);
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 text-white font-bold rounded-lg cursor-pointer"
+                        >
+                          Resolver
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

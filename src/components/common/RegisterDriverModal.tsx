@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PasswordInput } from './PasswordInput';
 import { compressAndEncodeImage } from '../../utils/imageUtils';
+import { DriverVehicleType } from '../../types';
 
 interface PhotoSlotProps {
   label: string;
@@ -149,6 +150,7 @@ export const RegisterDriverModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [city, setCity] = useState('Caracas');
+  const [vehicleType, setVehicleType] = useState<DriverVehicleType>('moto');
   const [motorcycleBrandModel, setMotorcycleBrandModel] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
   const [driverLicense, setDriverLicense] = useState('');
@@ -181,13 +183,13 @@ export const RegisterDriverModal: React.FC = () => {
       return;
     }
 
-    if (!motorcycleBrandModel.trim() || !plateNumber.trim()) {
-      setErrorMsg('Por favor especifica la marca/modelo de la moto y el número de placa.');
+    if (!motorcycleBrandModel.trim() || (vehicleType !== 'bicicleta' && !plateNumber.trim())) {
+      setErrorMsg('Por favor especifica el modelo de tu vehículo y el número de placa.');
       return;
     }
 
     if (!acceptTerms) {
-      setErrorMsg('Debes aceptar las condiciones del servicio de mensajería en moto.');
+      setErrorMsg('Debes aceptar las condiciones del servicio de mensajería y reparto.');
       return;
     }
 
@@ -200,8 +202,9 @@ export const RegisterDriverModal: React.FC = () => {
         password: password.trim(),
         phone: phone.trim(),
         ciDni: ciDni.trim(),
+        vehicleType,
         motorcycleBrandModel: motorcycleBrandModel.trim(),
-        plateNumber: plateNumber.trim(),
+        plateNumber: vehicleType === 'bicicleta' && !plateNumber.trim() ? 'BICICLETA' : plateNumber.trim().toUpperCase(),
         driverLicense: driverLicense.trim() || undefined,
         bankName,
         bankPhone: bankPhone.trim() || phone.trim(),
@@ -393,30 +396,63 @@ export const RegisterDriverModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Section 2: Datos de la Motocicleta */}
+            {/* Section 2: Datos del Vehículo */}
             <div className="space-y-3 pt-2 border-t border-zinc-800/80">
               <div className="flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
                 <Bike className="w-3.5 h-3.5 text-emerald-400" />
-                <span>2. Datos del Vehículo (Motocicleta)</span>
+                <span>2. Tipo de Vehículo & Datos de Ruta</span>
               </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { id: 'moto', label: '🛵 Moto', sub: 'Rápida urbana' },
+                    { id: 'bicicleta', label: '🚲 Bicicleta', sub: 'Zonas cortas' },
+                    { id: 'auto', label: '🚗 Auto', sub: 'Pedidos grandes' }
+                  ] as { id: DriverVehicleType; label: string; sub: string }[]
+                ).map((vt) => (
+                  <button
+                    key={vt.id}
+                    type="button"
+                    onClick={() => setVehicleType(vt.id)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      vehicleType === vt.id
+                        ? 'bg-emerald-950/80 border-emerald-500 text-white shadow-sm'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <span className="block font-bold text-xs">{vt.label}</span>
+                    <span className="block text-[10px] text-zinc-400">{vt.sub}</span>
+                  </button>
+                ))}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block text-zinc-300 font-semibold mb-1">Marca, Modelo y Color *</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Bera SBR 150 (Azul), Keeway Horse 150 (Rojo)"
+                    placeholder={
+                      vehicleType === 'bicicleta'
+                        ? 'Ej. Bicicleta Montañera Rin 29 (Negra)'
+                        : vehicleType === 'auto'
+                        ? 'Ej. Chevrolet Spark (Blanco)'
+                        : 'Ej. Bera SBR 150 (Azul), Keeway Horse 150 (Rojo)'
+                    }
                     value={motorcycleBrandModel}
                     onChange={(e) => setMotorcycleBrandModel(e.target.value)}
                     className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-300 font-semibold mb-1">Placa de la Moto *</label>
+                  <label className="block text-zinc-300 font-semibold mb-1">
+                    {vehicleType === 'bicicleta' ? 'Placa / Serial (Opcional)' : 'Placa del Vehículo *'}
+                  </label>
                   <input
                     type="text"
-                    required
-                    placeholder="Ej. AA1B22"
+                    required={vehicleType !== 'bicicleta'}
+                    placeholder={vehicleType === 'bicicleta' ? 'BICICLETA' : 'Ej. AA1B22'}
                     value={plateNumber}
                     onChange={(e) => setPlateNumber(e.target.value)}
                     className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 uppercase focus:outline-none focus:border-emerald-500"

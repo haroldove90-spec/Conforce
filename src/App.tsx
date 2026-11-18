@@ -32,21 +32,26 @@ const PulsoAppContent: React.FC = () => {
   const {
     currentRole,
     currentUser,
-    currentRoute,
     activeClientTab,
     selectedBusinessForDetail,
     setSelectedBusinessForDetail,
-    setActiveClientTab
+    setActiveClientTab,
+    pwaInstallHint,
+    clearPwaInstallHint
   } = useApp();
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
 
+  const isAdmin = currentUser?.role === 'admin';
+  const canAccessSeller = isAdmin || currentUser?.role === 'seller';
+  const canAccessDriver = isAdmin || currentUser?.role === 'driver';
+
   const handleSelectBusiness = (biz: Business) => {
     setSelectedBusinessForDetail(biz);
   };
 
-  const handleOrderSuccess = (orderId: string) => {
+  const handleOrderSuccess = () => {
     setActiveClientTab('orders');
   };
 
@@ -55,6 +60,20 @@ const PulsoAppContent: React.FC = () => {
       
       {/* Top PWA Install Banner */}
       <PWAInstallBanner />
+
+      {/* Non-blocking PWA manual instructions toast */}
+      {pwaInstallHint && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92%] bg-zinc-950 text-white border border-zinc-800 rounded-2xl p-3.5 shadow-2xl flex items-start justify-between gap-3 text-xs">
+          <p className="leading-relaxed">{pwaInstallHint}</p>
+          <button
+            type="button"
+            onClick={clearPwaInstallHint}
+            className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold shrink-0 cursor-pointer"
+          >
+            Entendido
+          </button>
+        </div>
+      )}
 
       {/* Top Application Header */}
       <Header
@@ -93,26 +112,26 @@ const PulsoAppContent: React.FC = () => {
               {activeClientTab === 'account' && (
                 <MyAccountView onOpenRoleModal={() => setIsRoleModalOpen(true)} />
               )}
-              {activeClientTab === 'roles_hub' && <RoleSwitcherHub />}
+              {activeClientTab === 'roles_hub' && isAdmin && <RoleSwitcherHub />}
             </>
           )}
 
-          {/* SELLER ROLE VIEWS */}
-          {currentRole === 'seller' && (
+          {/* SELLER ROLE VIEWS (Strict RBAC: seller or admin only) */}
+          {currentRole === 'seller' && canAccessSeller && (
             <ErrorBoundary fallbackTitle="Panel de Negocio Protegido">
               <SellerDashboard />
             </ErrorBoundary>
           )}
 
-          {/* SUPERADMIN ROLE VIEWS */}
-          {currentRole === 'admin' && (
+          {/* SUPERADMIN ROLE VIEWS (Strict RBAC: admin only) */}
+          {currentRole === 'admin' && isAdmin && (
             <ErrorBoundary fallbackTitle="Panel de Superadministrador Protegido">
               <SuperAdminDashboard />
             </ErrorBoundary>
           )}
 
-          {/* MOTORCYCLE COURIER / DRIVER ROLE VIEWS */}
-          {currentRole === 'driver' && (
+          {/* MOTORCYCLE COURIER / DRIVER ROLE VIEWS (Strict RBAC: driver or admin only) */}
+          {currentRole === 'driver' && canAccessDriver && (
             <ErrorBoundary fallbackTitle="Panel de Mensajería en Moto">
               <DriverDashboard />
             </ErrorBoundary>
@@ -128,7 +147,7 @@ const PulsoAppContent: React.FC = () => {
       <WebAssistantFloatingButton />
       <WebAssistantChatModal />
 
-      {/* Role Switcher Modal (2 columns on mobile) */}
+      {/* Role Switcher Modal (Admin only) */}
       <RoleAccessModal
         isOpen={isRoleModalOpen}
         onClose={() => setIsRoleModalOpen(false)}
