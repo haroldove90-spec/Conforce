@@ -98,6 +98,8 @@ export interface PendingProductOrder {
   quantity: number;
   variantLabel?: string;
   extras?: string[];
+  businessId?: string;
+  product?: Product;
 }
 
 interface AppContextType {
@@ -139,9 +141,9 @@ interface AppContextType {
 
   // Orders
   orders: Order[];
-  createOrder: (orderData: Omit<Order, 'id' | 'createdAt'>) => Order;
+  createOrder: (orderData: Omit<Order, 'id' | 'createdAt'>, options?: { preserveCart?: boolean }) => Order;
   updateOrderStatus: (orderId: string, newStatus: OrderStatus) => void;
-  assignOrderDriver: (orderId: string, driver: { name: string; phone: string; vehicle?: string }) => void;
+  assignOrderDriver: (orderId: string, driver: { id?: string; name: string; phone: string; vehicle?: string }) => void;
   rateOrder: (orderId: string, rating: number, comment?: string) => void;
   cancelOrderWithReason: (orderId: string, reason: string) => void;
   isSoundAlertEnabled: boolean;
@@ -291,6 +293,7 @@ interface AppContextType {
   loginDirectAsAdmin: (adminType?: 'harold' | 'master') => { success: boolean; message: string };
   loginDirectAsSeller: () => { success: boolean; message: string };
   loginDirectAsDriver: () => { success: boolean; message: string };
+  activateDemoSellerBusiness: () => void;
 
   // Modals & Intent
   isClientAuthModalOpen: boolean;
@@ -729,6 +732,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setClientAuthIntent('order_checkout');
       setIsClientAuthModalOpen(true);
       return;
+    }
+
+    // Record direct WhatsApp single-product request into business orders so the seller can see & dispatch it
+    const matchedBiz =
+      (orderData.businessId && businesses.find((b) => b.id === orderData.businessId)) ||
+      businesses.find((b) => b.name.toLowerCase() === orderData.businessName.toLowerCase()) ||
+      businesses.find((b) => (b.whatsapp || b.phone) === orderData.businessPhone);
+
+    if (matchedBiz) {
+      const matchedProduct: Product =
+        orderData.product ||
+        products.find(
+          (p) =>
+            p.businessId === matchedBiz.id &&
+            p.name.toLowerCase() === orderData.productName.toLowerCase()
+        ) || {
+          id: `prod-wa-${Date.now()}`,
+          businessId: matchedBiz.id,
+          name: orderData.productName,
+          description: 'Pedido directo por WhatsApp',
+          price: Number(orderData.priceBs) || 0,
+          priceUsd: orderData.priceUsd,
+          category: matchedBiz.category || 'General',
+          image: '',
+          inStock: true,
+          stockCount: 1,
+          tags: [],
+          isOfferOfTheDay: false
+        };
+
+      const qty = Math.max(1, Number(orderData.quantity) || 1);
+      const subtotalBs = Number((matchedProduct.price * qty).toFixed(2));
+      createOrder(
+        {
+          businessId: matchedBiz.id,
+          businessName: matchedBiz.name,
+          businessLogo: matchedBiz.logo,
+          customerName: currentUser.name,
+          customerPhone: currentUser.phone || '+58 412 0000000',
+          items: [
+            {
+              product: matchedProduct,
+              quantity: qty,
+              businessId: matchedBiz.id,
+              itemTotalBs: matchedProduct.price,
+              selectedVariantOption: orderData.variantLabel
+                ? { variantName: 'Opción', optionLabel: orderData.variantLabel, priceDelta: 0 }
+                : undefined
+            }
+          ],
+          subtotal: subtotalBs,
+          deliveryFee: 0,
+          serviceFee: 0,
+          serviceFeeRate: 0,
+          total: subtotalBs,
+          deliveryType: 'delivery',
+          deliveryAddress: currentUser.address || userAddressLabel || 'Por confirmar vía WhatsApp',
+          deliveryCoordinates: userLocation || undefined,
+          paymentMethod: 'pago_movil',
+          orderChannel: 'whatsapp',
+          status: 'preparing',
+          notes: orderData.extras?.length ? `Extras: ${orderData.extras.join(', ')}` : 'Pedido directo desde WhatsApp'
+        },
+        { preserveCart: true }
+      );
     }
 
     const msg = buildProductWhatsAppOrderMessage({
@@ -1546,12 +1614,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: `Sesión iniciada con éxito como ${target.name}` };
   };
 
+  const activateDemoSellerBusiness = () => {
+    const demoBiz = INITIAL_BUSINESSES[0];
+    if (!demoBiz) return;
+
+    setBusinesses((prev) => {
+      if (prev.some((b) => b.id === demoBiz.id)) return prev;
+      return [{ ...demoBiz, ownerUsername: currentUser?.username || 'farmacia_sanrafael' }, ...prev];
+    });
+
+    setProducts((prev) => {
+      const existingIds = new Set(prev.map((p) => p.id));
+      const demoProds = INITIAL_PRODUCTS.filter((p) => p.businessId === demoBiz.id && !existingIds.has(p.id));
+      return demoProds.length > 0 ? [...demoProds, ...prev] : prev;
+    });
+
+    setSelectedBusinessId(demoBiz.id);
+    upsertBusinessInSupabase({ ...demoBiz, ownerUsername: currentUser?.username || 'farmacia_sanrafael' }).catch(() => {});
+  };
+
   const loginDirectAsSeller = (): { success: boolean; message: string } => {
     let target = users.find(u => u.role === 'seller');
     if (!target) {
       target = INITIAL_USERS.find(u => u.role === 'seller') || INITIAL_USERS[3];
       setUsers(prev => [target!, ...prev.filter(p => p.id !== target!.id)]);
     }
+
+    // Ensure seller demo always has a valid active business & catalog so modules never appear locked
+    const matchedBiz = businesses.find(
+      (b) =>
+        (target?.businessId && b.id === target.businessId) ||
+        (b.ownerUsername && target?.username && b.ownerUsername.toLowerCase() === target.username.toLowerCase())
+    ) || businesses[0];
+
+    if (matchedBiz) {
+      setSelectedBusinessId(matchedBiz.id);
+    } else if (INITIAL_BUSINESSES[0]) {
+      const demoBiz = { ...INITIAL_BUSINESSES[0], ownerUsername: target.username };
+      setBusinesses((prev) => [demoBiz, ...prev.filter((b) => b.id !== demoBiz.id)]);
+      setProducts((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const demoProds = INITIAL_PRODUCTS.filter((p) => p.businessId === demoBiz.id && !existingIds.has(p.id));
+        return demoProds.length > 0 ? [...demoProds, ...prev] : prev;
+      });
+      setSelectedBusinessId(demoBiz.id);
+    }
+
     setCurrentUser(target);
     setCurrentRole('seller');
     setActiveSellerTab('orders');
@@ -2179,9 +2287,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const isCleared = localStorage.getItem('mk_mock_data_cleared') === 'true';
 
         if (remoteBiz) {
-          const finalBiz = isCleared
+          let storedPayments: Record<string, Business['paymentInfo']> = {};
+          try {
+            const rawPay = localStorage.getItem('mk_biz_payment_info');
+            if (rawPay) storedPayments = JSON.parse(rawPay);
+          } catch {}
+
+          const finalBiz = (isCleared
             ? remoteBiz.filter((b) => !MOCK_BUSINESS_IDS.has(b.id))
-            : remoteBiz;
+            : remoteBiz
+          ).map((b) => ({
+            ...b,
+            paymentInfo: b.paymentInfo || storedPayments[b.id]
+          }));
+
           setBusinesses((prev) => {
             const remoteMap = new Map<string, Business>();
             finalBiz.forEach((b) => remoteMap.set(b.id, b));
@@ -2698,6 +2817,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateBusiness = (id: string, updates: Partial<Business>) => {
+    if (updates.paymentInfo) {
+      try {
+        const raw = localStorage.getItem('mk_biz_payment_info');
+        const map = raw ? JSON.parse(raw) : {};
+        map[id] = updates.paymentInfo;
+        localStorage.setItem('mk_biz_payment_info', JSON.stringify(map));
+      } catch {}
+    }
     setBusinesses(prev => {
       const updated = prev.map(b => (b.id === id ? { ...b, ...updates } : b));
       const target = updated.find(b => b.id === id);
@@ -2751,14 +2878,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Orders
-  const createOrder = (orderData: Omit<Order, 'id' | 'createdAt'>): Order => {
+  const createOrder = (orderData: Omit<Order, 'id' | 'createdAt'>, options?: { preserveCart?: boolean }): Order => {
     const newOrder: Order = {
       ...orderData,
       id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: 'Justo ahora'
     };
     setOrders(prev => [newOrder, ...prev]);
-    clearCart();
+    if (!options?.preserveCart) {
+      clearCart();
+    }
     insertOrderInSupabase(newOrder);
 
     // Update client profile stats if matching
@@ -3613,6 +3742,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginDirectAsAdmin,
         loginDirectAsSeller,
         loginDirectAsDriver,
+        activateDemoSellerBusiness,
 
         // Modals & Links
         isClientAuthModalOpen,

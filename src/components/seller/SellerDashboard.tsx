@@ -37,9 +37,18 @@ import {
   Image as ImageIcon,
   Layers,
   Utensils,
-  ChefHat
+  ChefHat,
+  Eye,
+  BarChart3,
+  MessageCircle,
+  CreditCard,
+  Minus
 } from 'lucide-react';
 import { SellerBoostPaymentModal } from './SellerBoostPaymentModal';
+import { SellerShowcaseTab } from './SellerShowcaseTab';
+import { SellerDispatchTab } from './SellerDispatchTab';
+import { SellerStatsTab } from './SellerStatsTab';
+import { formatVenezuelanWhatsAppNumber } from '../../utils/urlUtils';
 import {
   compressAndEncodeImage,
   buildSafeProductPlaceholder,
@@ -73,6 +82,7 @@ export const SellerDashboard: React.FC = () => {
     activeSellerTab,
     setActiveSellerTab,
     openBusinessRegistration,
+    activateDemoSellerBusiness,
     logout,
     exchangeRateUsd,
     setExchangeRateUsd,
@@ -155,9 +165,21 @@ export const SellerDashboard: React.FC = () => {
   const [isProcessingBanner, setIsProcessingBanner] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const [bizPinColor, setBizPinColor] = useState(biz?.customPinColor || '#2563eb');
+  const [payBankName, setPayBankName] = useState(biz?.paymentInfo?.bankName || 'Banesco (0134)');
+  const [payPhone, setPayPhone] = useState(biz?.paymentInfo?.phone || biz?.phone || '');
+  const [payDocId, setPayDocId] = useState(biz?.paymentInfo?.documentId || biz?.rif || '');
+  const [payHolder, setPayHolder] = useState(biz?.paymentInfo?.accountHolder || biz?.name || '');
+  const [payZelle, setPayZelle] = useState(biz?.paymentInfo?.zelleEmail || '');
   const [profileSavedToast, setProfileSavedToast] = useState(false);
   const [sellerGpsStatus, setSellerGpsStatus] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
   const [isDetectingSellerGps, setIsDetectingSellerGps] = useState(false);
+
+  // Filters for Orders & Catalog
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'on_the_way' | 'completed'>('all');
+  const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogCategoryFilter, setCatalogCategoryFilter] = useState('all');
+  const [catalogStockFilter, setCatalogStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock' | 'offers'>('all');
 
   // Keep form synced whenever active business changes or hydrates from Supabase
   useEffect(() => {
@@ -171,13 +193,19 @@ export const SellerDashboard: React.FC = () => {
     setBizLogo(biz.logo || '🏪');
     setBizBanner(biz.bannerImage || '');
     setBizPinColor(biz.customPinColor || '#2563eb');
+    setPayBankName(biz.paymentInfo?.bankName || 'Banesco (0134)');
+    setPayPhone(biz.paymentInfo?.phone || biz.phone || '');
+    setPayDocId(biz.paymentInfo?.documentId || biz.rif || '');
+    setPayHolder(biz.paymentInfo?.accountHolder || biz.name || '');
+    setPayZelle(biz.paymentInfo?.zelleEmail || '');
   }, [biz?.id, biz?.coordinates?.lat, biz?.coordinates?.lng]);
 
   // States for Driver Dispatch Modal
   const [dispatchOrder, setDispatchOrder] = useState<Order | null>(null);
-  const [driverName, setDriverName] = useState('Carlos Rodríguez');
-  const [driverPhone, setDriverPhone] = useState('+58 412 9988776');
-  const [driverVehicle, setDriverVehicle] = useState('Moto Bera SBR - Placa AB123');
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+  const [driverName, setDriverName] = useState('');
+  const [driverPhone, setDriverPhone] = useState('');
+  const [driverVehicle, setDriverVehicle] = useState('');
 
   // States for Cancel Order Modal
   const [cancelOrderTarget, setCancelOrderTarget] = useState<Order | null>(null);
@@ -200,6 +228,11 @@ export const SellerDashboard: React.FC = () => {
       setBizLogo(target.logo);
       setBizBanner(target.bannerImage || '');
       setBizPinColor(target.customPinColor || '#2563eb');
+      setPayBankName(target.paymentInfo?.bankName || 'Banesco (0134)');
+      setPayPhone(target.paymentInfo?.phone || target.phone || '');
+      setPayDocId(target.paymentInfo?.documentId || target.rif || '');
+      setPayHolder(target.paymentInfo?.accountHolder || target.name || '');
+      setPayZelle(target.paymentInfo?.zelleEmail || '');
     }
   };
 
@@ -216,7 +249,14 @@ export const SellerDashboard: React.FC = () => {
       openingHours: bizHours,
       logo: bizLogo,
       bannerImage: bizBanner || biz.bannerImage,
-      customPinColor: bizPinColor
+      customPinColor: bizPinColor,
+      paymentInfo: {
+        bankName: payBankName,
+        phone: payPhone,
+        documentId: payDocId,
+        accountHolder: payHolder,
+        zelleEmail: payZelle
+      }
     });
     setProfileSavedToast(true);
     setTimeout(() => setProfileSavedToast(false), 2500);
@@ -453,6 +493,12 @@ export const SellerDashboard: React.FC = () => {
             + Registrar Nuevo Comercio
           </button>
           <button
+            onClick={() => activateDemoSellerBusiness()}
+            className="px-5 py-2.5 bg-zinc-900 hover:bg-black text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+          >
+            ⚡ Activar Comercio Demo de Prueba
+          </button>
+          <button
             onClick={() => logout()}
             className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer"
           >
@@ -462,6 +508,47 @@ export const SellerDashboard: React.FC = () => {
       </div>
     );
   }
+
+  const openDispatchModalForOrder = (order: Order) => {
+    const firstActive = drivers.find((d) => d.status === 'active' && d.isAvailable) || drivers.find((d) => d.status === 'active');
+    if (firstActive) {
+      setSelectedDriverId(firstActive.id);
+      setDriverName(firstActive.fullName);
+      setDriverPhone(firstActive.phone);
+      setDriverVehicle(`${firstActive.motorcycleBrandModel} - Placa ${firstActive.plateNumber}`);
+    } else {
+      setSelectedDriverId('');
+      setDriverName('');
+      setDriverPhone('');
+      setDriverVehicle('');
+    }
+    setDispatchOrder(order);
+  };
+
+  const filteredSellerOrders = sellerOrders.filter((o) => {
+    if (orderStatusFilter === 'active') return o.status === 'preparing' || o.status === 'ready';
+    if (orderStatusFilter === 'on_the_way') return o.status === 'on_the_way';
+    if (orderStatusFilter === 'completed') return o.status === 'delivered' || o.status === 'cancelled';
+    return true;
+  });
+
+  const productCategories = ['all', ...Array.from(new Set(bizProducts.map((p) => p.category || 'General')))];
+  const filteredCatalogProducts = bizProducts.filter((p) => {
+    if (catalogCategoryFilter !== 'all' && (p.category || 'General') !== catalogCategoryFilter) return false;
+    if (catalogStockFilter === 'in_stock' && (!p.inStock || p.stockCount <= 0)) return false;
+    if (catalogStockFilter === 'out_of_stock' && p.inStock && p.stockCount > 0) return false;
+    if (catalogStockFilter === 'offers' && !p.isOfferOfTheDay) return false;
+    if (catalogSearch.trim()) {
+      const q = catalogSearch.toLowerCase();
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+    return true;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-3 md:px-6 py-4 space-y-6 pb-24 md:pb-12 bg-white">
@@ -478,7 +565,11 @@ export const SellerDashboard: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-bold text-[10px] uppercase border border-slate-200">
-                {biz.category === 'farmacia' ? '💊 Farmacia' : '🍔 Restaurante'}
+                {biz.category === 'farmacia'
+                  ? '💊 Farmacia'
+                  : biz.category === 'restaurante'
+                  ? '🍔 Restaurante'
+                  : `🏪 ${biz.category}`}
               </span>
               <span className="text-xs text-slate-600 font-medium">· Comisión {biz.commissionRate}%</span>
             </div>
@@ -486,8 +577,8 @@ export const SellerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Store Dropdown selector */}
-        <div className="flex items-center gap-2">
+        {/* Store Dropdown selector & Quick Create */}
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-600 font-medium">Mi Negocio:</span>
           <select
             value={biz.id}
@@ -503,17 +594,62 @@ export const SellerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Sub Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      {/* Persistent Quick Actions Bar (Always visible regardless of active tab) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveSellerTab('catalog');
+            openNewProductModal();
+          }}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-[#D4021D] hover:bg-[#b50218] text-white text-xs font-black shadow-sm transition-all cursor-pointer active:scale-95"
+        >
+          <Plus className="w-4 h-4 shrink-0" />
+          <span>+ Dar de Alta Producto</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSellerTab('showcase')}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-slate-900 hover:bg-black text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
+        >
+          <Eye className="w-4 h-4 shrink-0" />
+          <span>Ver Mi Vitrina ({bizProducts.filter((p) => p.inStock && p.stockCount > 0).length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSellerTab('dispatch')}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
+        >
+          <Bike className="w-4 h-4 shrink-0" />
+          <span>Asignar a Mensajero</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSellerTab('orders')}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
+        >
+          <Clock3 className="w-4 h-4 text-[#D4021D] shrink-0" />
+          <span>Pedidos ({sellerOrders.length})</span>
+        </button>
+      </div>
+
+      {/* Sub Tabs Navigation (Scrollable horizontally on mobile) */}
+      <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
         {[
-          { id: 'orders', label: `Pedidos en Vivo (${sellerOrders.length})`, icon: <Clock3 className="w-4 h-4" /> },
-          { id: 'catalog', label: `Catálogo & Stock (${bizProducts.length})`, icon: <Package className="w-4 h-4" /> },
-          { id: 'profile', label: 'Perfil Comercial & GPS', icon: <MapPin className="w-4 h-4" /> }
+          { id: 'orders', label: `Pedidos (${sellerOrders.length})`, icon: <Clock3 className="w-4 h-4" /> },
+          { id: 'catalog', label: `Productos (${bizProducts.length})`, icon: <Package className="w-4 h-4" /> },
+          { id: 'showcase', label: 'Mi Vitrina', icon: <Eye className="w-4 h-4" /> },
+          { id: 'dispatch', label: 'Mensajeros', icon: <Bike className="w-4 h-4" /> },
+          { id: 'stats', label: 'Métricas', icon: <BarChart3 className="w-4 h-4" /> },
+          { id: 'profile', label: 'Perfil GPS & Cobros', icon: <MapPin className="w-4 h-4" /> }
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveSellerTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
               activeSellerTab === tab.id
                 ? 'bg-[#D4021D] text-white shadow-sm'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -568,17 +704,63 @@ export const SellerDashboard: React.FC = () => {
             </div>
           </div>
 
-          {sellerOrders.length === 0 ? (
-            <div className="text-center py-16 bg-slate-50 rounded-3xl border border-slate-200 text-slate-500 space-y-2">
+          {/* Order Status Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            {[
+              { id: 'all', label: `Todos (${sellerOrders.length})` },
+              { id: 'active', label: `Por Atender (${sellerOrders.filter((o) => o.status === 'preparing' || o.status === 'ready').length})` },
+              { id: 'on_the_way', label: `En Ruta (${sellerOrders.filter((o) => o.status === 'on_the_way').length})` },
+              { id: 'completed', label: `Historial (${sellerOrders.filter((o) => o.status === 'delivered' || o.status === 'cancelled').length})` }
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setOrderStatusFilter(f.id as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition-all cursor-pointer ${
+                  orderStatusFilter === f.id
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {filteredSellerOrders.length === 0 ? (
+            <div className="text-center py-14 bg-slate-50 rounded-3xl border border-slate-200 text-slate-500 space-y-3">
               <div className="text-4xl">📋</div>
-              <p className="font-bold text-slate-900 text-sm">No tienes pedidos pendientes</p>
-              <p className="text-xs max-w-xs mx-auto">
-                Los clientes que ordenen en tu local aparecerán aquí inmediatamente con alarma sonora.
+              <p className="font-bold text-slate-900 text-sm">
+                {sellerOrders.length === 0
+                  ? 'No tienes pedidos pendientes todavía'
+                  : 'No hay pedidos en este filtro'}
               </p>
+              <p className="text-xs max-w-sm mx-auto">
+                Los clientes que ordenen por la App o WhatsApp aparecerán aquí inmediatamente. Mientras tanto puedes gestionar tus productos o asignar un despacho manual.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveSellerTab('catalog');
+                    openNewProductModal();
+                  }}
+                  className="px-4 py-2 bg-[#D4021D] hover:bg-red-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  + Dar de Alta Producto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSellerTab('dispatch')}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  🛵 Asignar Despacho a Mensajero
+                </button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {sellerOrders.map((order) => (
+              {filteredSellerOrders.map((order) => (
                 <div
                   key={order.id}
                   className="bg-white rounded-3xl border border-slate-200 p-4 space-y-3 shadow-xs hover:border-slate-300 transition-all"
@@ -674,6 +856,18 @@ export const SellerDashboard: React.FC = () => {
                         <strong className="text-amber-900">{order.paymentReference}</strong>
                       </div>
                     )}
+                    {order.paymentProofUrl && (
+                      <div className="flex items-center justify-between bg-emerald-50/70 px-2 py-1.5 rounded-md border border-emerald-200">
+                        <span className="text-emerald-900 font-semibold">Comprobante de Pago:</span>
+                        <button
+                          type="button"
+                          onClick={() => setProofPreviewUrl(order.paymentProofUrl || null)}
+                          className="text-emerald-700 hover:underline font-bold cursor-pointer flex items-center gap-1"
+                        >
+                          <Eye className="w-3 h-3" /> Ver Captura
+                        </button>
+                      </div>
+                    )}
                     {order.driverName && (
                       <div className="flex items-center gap-1.5 text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200 font-medium">
                         <Bike className="w-3.5 h-3.5 text-emerald-600" />
@@ -728,7 +922,7 @@ export const SellerDashboard: React.FC = () => {
                           key={st.id}
                           onClick={() => {
                             if (st.id === 'on_the_way') {
-                              setDispatchOrder(order);
+                              openDispatchModalForOrder(order);
                             } else {
                               updateOrderStatus(order.id, st.id as OrderStatus);
                             }
@@ -743,6 +937,20 @@ export const SellerDashboard: React.FC = () => {
                         </button>
                       ))}
                     </div>
+
+                    {order.customerPhone && (
+                      <a
+                        href={`https://wa.me/${formatVenezuelanWhatsAppNumber(order.customerPhone)}?text=${encodeURIComponent(
+                          `Hola ${order.customerName}, te escribimos de *${biz.name}* sobre tu pedido #${order.id}.`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full mt-1 py-1.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>Escribir al Cliente por WhatsApp</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               ))}
@@ -811,12 +1019,76 @@ export const SellerDashboard: React.FC = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {bizProducts.map((prod) => (
-              <div
-                key={prod.id}
-                className="bg-white rounded-3xl border border-slate-200 p-3.5 space-y-3 shadow-xs flex flex-col justify-between"
+          {/* Search & Filter Toolbar for Catalog */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                placeholder="Buscar producto por nombre, descripción o keyword..."
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[#D4021D]"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={catalogCategoryFilter}
+                onChange={(e) => setCatalogCategoryFilter(e.target.value)}
+                className="bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#D4021D]"
               >
+                {productCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat === 'all' ? 'Todas las categorías' : cat}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={catalogStockFilter}
+                onChange={(e) => setCatalogStockFilter(e.target.value as any)}
+                className="bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#D4021D]"
+              >
+                <option value="all">Todo el stock</option>
+                <option value="in_stock">Disponibles</option>
+                <option value="out_of_stock">Agotados</option>
+                <option value="offers">Ofertas del día</option>
+              </select>
+            </div>
+          </div>
+
+          {filteredCatalogProducts.length === 0 ? (
+            <div className="text-center py-14 bg-slate-50 rounded-3xl border border-dashed border-slate-300 space-y-3">
+              <Package className="w-12 h-12 text-slate-400 mx-auto" />
+              <div className="space-y-1">
+                <p className="font-black text-slate-900 text-sm">
+                  {bizProducts.length === 0
+                    ? 'Aún no has dado de alta productos en tu tienda'
+                    : 'Ningún producto coincide con tu búsqueda'}
+                </p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  {bizProducts.length === 0
+                    ? 'Sube tus productos con fotos reales desde tu celular o PC, precios en Bolívares y Dólares, variantes y stock.'
+                    : 'Prueba borrando el texto de búsqueda o cambiando el filtro de categoría/stock.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openNewProductModal}
+                className="inline-flex items-center gap-1.5 bg-[#D4021D] hover:bg-[#b50218] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Dar de Alta Primer Producto</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredCatalogProducts.map((prod) => (
+                <div
+                  key={prod.id}
+                  className="bg-white rounded-3xl border border-slate-200 p-3.5 space-y-3 shadow-xs flex flex-col justify-between"
+                >
                 <div className="flex gap-3">
                   <img
                     src={resolveProductImage(prod.image, prod.images, prod.name)}
@@ -875,16 +1147,42 @@ export const SellerDashboard: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Stock pill */}
-                    <div className="flex items-center gap-1 mt-1 text-[11px]">
-                      <span className="text-slate-500">Stock:</span>
-                      <span
-                        className={`font-bold ${
-                          prod.stockCount > 0 ? 'text-slate-900' : 'text-red-500'
-                        }`}
-                      >
-                        {prod.stockCount} uds
-                      </span>
+                    {/* Quick Stock Controls */}
+                    <div className="flex items-center justify-between gap-2 mt-1.5 text-[11px]">
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-500">Stock:</span>
+                        <span
+                          className={`font-bold ${
+                            prod.stockCount > 0 && prod.inStock ? 'text-slate-900' : 'text-red-500'
+                          }`}
+                        >
+                          {prod.inStock ? `${prod.stockCount} uds` : 'Pausado'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextStock = Math.max(0, prod.stockCount - 1);
+                            updateProduct(prod.id, { stockCount: nextStock, inStock: nextStock > 0 });
+                          }}
+                          className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer"
+                          title="Disminuir stock en 1"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextStock = prod.stockCount + 1;
+                            updateProduct(prod.id, { stockCount: nextStock, inStock: true });
+                          }}
+                          className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer"
+                          title="Aumentar stock en 1"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -940,9 +1238,46 @@ export const SellerDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* 3. PUBLIC SHOWCASE MODULE (Productos que están ofreciendo) */}
+      {activeSellerTab === 'showcase' && (
+        <SellerShowcaseTab
+          biz={biz}
+          bizProducts={bizProducts}
+          onOpenNewProduct={openNewProductModal}
+          onEditProduct={(prod) => {
+            setActiveSellerTab('catalog');
+            openEditProductModal(prod);
+          }}
+        />
+      )}
+
+      {/* 4. DISPATCH & COURIERS MODULE (Asignar productos / pedidos a mensajero) */}
+      {activeSellerTab === 'dispatch' && (
+        <SellerDispatchTab
+          biz={biz}
+          bizProducts={bizProducts}
+          sellerOrders={sellerOrders}
+          onOpenNewProduct={() => {
+            setActiveSellerTab('catalog');
+            openNewProductModal();
+          }}
+        />
+      )}
+
+      {/* 5. METRICS & FINANCE MODULE */}
+      {activeSellerTab === 'stats' && (
+        <SellerStatsTab
+          biz={biz}
+          bizProducts={bizProducts}
+          sellerOrders={sellerOrders}
+          onGoToCatalog={() => setActiveSellerTab('catalog')}
+        />
       )}
 
       {/* 3. PROFILE & GEOLOCATION MODULE */}
@@ -1190,6 +1525,55 @@ export const SellerDashboard: React.FC = () => {
                     value={bizLng}
                     onChange={(e) => setBizLng(parseFloat(e.target.value))}
                     className="w-full mt-0.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:outline-none focus:border-[#D4021D]"
+                  />
+                </div>
+              </div>
+            </div>
+            {/* Datos de Cobro del Comercio (Pago Móvil / Zelle) */}
+            <div className="md:col-span-2 p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-200 space-y-3">
+              <div className="flex items-center gap-1.5 text-emerald-950 font-black text-xs">
+                <CreditCard className="w-4 h-4 text-emerald-600" />
+                <span>Datos de Cobro del Negocio (Pago Móvil / Transferencia / Zelle)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                <div>
+                  <label className="text-slate-600 font-bold text-[10px] uppercase">Banco</label>
+                  <input
+                    type="text"
+                    value={payBankName}
+                    onChange={(e) => setPayBankName(e.target.value)}
+                    placeholder="Banesco (0134) / Mercantil / BDV"
+                    className="w-full mt-0.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold text-[10px] uppercase">Teléfono Pago Móvil</label>
+                  <input
+                    type="text"
+                    value={payPhone}
+                    onChange={(e) => setPayPhone(e.target.value)}
+                    placeholder="0412-1234567"
+                    className="w-full mt-0.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold text-[10px] uppercase">Cédula o RIF</label>
+                  <input
+                    type="text"
+                    value={payDocId}
+                    onChange={(e) => setPayDocId(e.target.value)}
+                    placeholder="V-12345678 / J-50123456-7"
+                    className="w-full mt-0.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold text-[10px] uppercase">Titular / Zelle (Opcional)</label>
+                  <input
+                    type="text"
+                    value={payZelle}
+                    onChange={(e) => setPayZelle(e.target.value)}
+                    placeholder="correo@zelle.com o nombre titular"
+                    className="w-full mt-0.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900"
                   />
                 </div>
               </div>
@@ -1857,12 +2241,13 @@ export const SellerDashboard: React.FC = () => {
                         key={drv.id}
                         type="button"
                         onClick={() => {
+                          setSelectedDriverId(drv.id);
                           setDriverName(drv.fullName);
                           setDriverPhone(drv.phone);
                           setDriverVehicle(`${drv.motorcycleBrandModel} - Placa ${drv.plateNumber}`);
                         }}
                         className={`p-2 rounded-xl border text-left shrink-0 transition-all cursor-pointer ${
-                          driverName === drv.fullName
+                          selectedDriverId === drv.id || driverName === drv.fullName
                             ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500'
                             : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                         }`}
@@ -1872,7 +2257,7 @@ export const SellerDashboard: React.FC = () => {
                           <span className="font-bold text-slate-900 text-xs">{drv.fullName}</span>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[140px]">
-                          {drv.motorcycleBrandModel}
+                          {drv.isAvailable ? '🟢 En Línea' : '⚪ Offline'} · {drv.motorcycleBrandModel}
                         </p>
                       </button>
                     ))}
@@ -1885,7 +2270,10 @@ export const SellerDashboard: React.FC = () => {
                 <input
                   type="text"
                   value={driverName}
-                  onChange={(e) => setDriverName(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedDriverId('');
+                    setDriverName(e.target.value);
+                  }}
                   placeholder="Ej: Alejandro Mendoza"
                   className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-[#D4021D]"
                 />
@@ -1916,7 +2304,7 @@ export const SellerDashboard: React.FC = () => {
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
                 <p>📍 <strong>Destino:</strong> {dispatchOrder.deliveryAddress}</p>
                 <p>👤 <strong>Cliente:</strong> {dispatchOrder.customerName} ({dispatchOrder.customerPhone})</p>
-                <p>💰 <strong>Total a Cobrar:</strong> Bs. {dispatchOrder.total} ({dispatchOrder.paymentMethod})</p>
+                <p>💰 <strong>Total a Cobrar:</strong> {formatCurrency(dispatchOrder.total).formatted} ({dispatchOrder.paymentMethod})</p>
               </div>
             </div>
 
@@ -1933,6 +2321,7 @@ export const SellerDashboard: React.FC = () => {
                 onClick={() => {
                   if (!driverName.trim()) return;
                   assignOrderDriver(dispatchOrder.id, {
+                    id: selectedDriverId || undefined,
                     name: driverName.trim(),
                     phone: driverPhone.trim(),
                     vehicle: driverVehicle.trim()
@@ -1945,6 +2334,35 @@ export const SellerDashboard: React.FC = () => {
                 <span>Confirmar y Enviar</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Proof Lightbox */}
+      {proofPreviewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setProofPreviewUrl(null)}
+        >
+          <div
+            className="bg-white rounded-3xl p-4 max-w-md w-full space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm text-slate-900">Comprobante de Pago del Cliente</h4>
+              <button
+                type="button"
+                onClick={() => setProofPreviewUrl(null)}
+                className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={proofPreviewUrl}
+              alt="Comprobante de pago"
+              className="w-full max-h-[65vh] object-contain rounded-xl border border-slate-200 bg-slate-50"
+            />
           </div>
         </div>
       )}

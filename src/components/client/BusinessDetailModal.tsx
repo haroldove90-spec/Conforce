@@ -329,7 +329,9 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                                 priceUsd: exchangeRateUsd > 0 ? Number((prod.price / exchangeRateUsd).toFixed(2)) : undefined,
                                 businessName: business.name,
                                 businessPhone: business.whatsapp || business.phone,
-                                quantity: qty > 0 ? qty : 1
+                                quantity: qty > 0 ? qty : 1,
+                                businessId: business.id,
+                                product: prod
                               });
                             }}
                             className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
@@ -671,7 +673,9 @@ export const BusinessDetailModal: React.FC<BusinessDetailModalProps> = ({
                       businessPhone: business.whatsapp || business.phone,
                       quantity: 1,
                       variantLabel: variantText,
-                      extras: extrasList.length > 0 ? extrasList : undefined
+                      extras: extrasList.length > 0 ? extrasList : undefined,
+                      businessId: business.id,
+                      product: customizingProduct
                     });
                     setCustomizingProduct(null);
                   }}

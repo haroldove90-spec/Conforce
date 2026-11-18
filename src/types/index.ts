@@ -45,6 +45,13 @@ export interface Business {
   email?: string;
   city?: string;
   state?: string;
+  paymentInfo?: {
+    bankName?: string;
+    phone?: string;
+    documentId?: string;
+    accountHolder?: string;
+    zelleEmail?: string;
+  };
 }
 
 export interface ProductVariantOption {

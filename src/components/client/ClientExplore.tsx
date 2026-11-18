@@ -731,7 +731,9 @@ export const ClientExplore: React.FC<ClientExploreProps> = ({
                               priceUsd: exchangeRateUsd > 0 ? Number((prod.price / exchangeRateUsd).toFixed(2)) : undefined,
                               businessName: prod.business.name,
                               businessPhone: prod.business.whatsapp || prod.business.phone,
-                              quantity: 1
+                              quantity: 1,
+                              businessId: prod.business.id,
+                              product: prod
                             });
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 transition-all shadow-2xs cursor-pointer active:scale-95"

@@ -528,7 +528,9 @@ export const ProductSearchComparator: React.FC<ProductSearchComparatorProps> = (
                           priceUsd: exchangeRateUsd > 0 ? Number((product.price / exchangeRateUsd).toFixed(2)) : undefined,
                           businessName: business.name,
                           businessPhone: business.whatsapp || business.phone,
-                          quantity: 1
+                          quantity: 1,
+                          businessId: business.id,
+                          product
                         })}
                         className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-semibold shadow-2xs cursor-pointer transition-colors"
                         title="Solicitar o pedir por WhatsApp directamente a este negocio"

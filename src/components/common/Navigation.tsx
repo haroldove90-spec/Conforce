@@ -26,7 +26,8 @@ import {
   Check,
   X,
   Bike,
-  ShieldCheck
+  ShieldCheck,
+  Eye
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -73,9 +74,11 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
     }
   };
 
-  // Active pending orders count for badge
+  // Active pending orders count for badge (scoped to seller business when in seller role)
   const pendingOrdersCount = orders.filter(
-    o => o.status === 'preparing' || o.status === 'ready' || o.status === 'on_the_way'
+    o =>
+      (currentRole !== 'seller' || !currentSellerBusiness || o.businessId === currentSellerBusiness.id) &&
+      (o.status === 'preparing' || o.status === 'ready' || o.status === 'on_the_way')
   ).length;
 
   // Desktop Left Sidebar navigation items by role
@@ -84,9 +87,11 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
       case 'seller':
         return [
           { id: 'orders', label: 'Pedidos en Vivo', icon: <Clock className="w-4 h-4" />, badge: pendingOrdersCount },
-          { id: 'catalog', label: 'Catálogo e Inventario', icon: <Package className="w-4 h-4" /> },
-          { id: 'profile', label: 'Perfil Comercial y GPS', icon: <Store className="w-4 h-4" /> },
-          { id: 'stats', label: 'Métricas de Tienda', icon: <BarChart3 className="w-4 h-4" /> }
+          { id: 'catalog', label: 'Productos y Alta', icon: <Package className="w-4 h-4" /> },
+          { id: 'showcase', label: 'Mi Vitrina (Ofrecidos)', icon: <Eye className="w-4 h-4" /> },
+          { id: 'dispatch', label: 'Mensajeros y Despacho', icon: <Bike className="w-4 h-4" /> },
+          { id: 'stats', label: 'Métricas y Finanzas', icon: <BarChart3 className="w-4 h-4" /> },
+          { id: 'profile', label: 'Perfil Comercial y GPS', icon: <Store className="w-4 h-4" /> }
         ];
       case 'admin':
         return [
@@ -120,9 +125,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenRoleModal, onOpenC
       case 'seller':
         return [
           { id: 'orders', label: 'Pedidos', icon: <Clock className="w-5 h-5 text-white" />, badge: pendingOrdersCount },
-          { id: 'catalog', label: 'Catálogo', icon: <Package className="w-5 h-5 text-white" /> },
-          { id: 'profile', label: 'Perfil GPS', icon: <Store className="w-5 h-5 text-white" /> },
-          { id: 'roles_modal', label: 'Roles', icon: <Sparkles className="w-5 h-5 text-white" /> }
+          { id: 'catalog', label: 'Productos', icon: <Package className="w-5 h-5 text-white" /> },
+          { id: 'showcase', label: 'Vitrina', icon: <Eye className="w-5 h-5 text-white" /> },
+          { id: 'dispatch', label: 'Mensajeros', icon: <Bike className="w-5 h-5 text-emerald-400" /> },
+          { id: 'profile', label: 'Perfil', icon: <Store className="w-5 h-5 text-white" /> }
         ];
       case 'admin':
         return [
